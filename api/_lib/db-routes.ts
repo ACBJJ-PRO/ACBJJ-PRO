@@ -1543,19 +1543,21 @@ router.post('/mensalidades/:id/estornar', requireAdmin, async (req: AuthRequest,
 // GET /api/cloudsql/carteirinhas/config
 router.get('/carteirinhas/config', async (_req: Request, res: Response) => {
   try {
+    try { await ensureSchema(); } catch {}
     const list = await db.select().from(schema.systemConfigs).where(eq(schema.systemConfigs.key, 'carteirinha_config')).limit(1);
     if (list.length > 0) {
       return res.json({ success: true, config: list[0].value });
     }
     res.json({ success: true, config: null });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to read carteirinha config', details: err instanceof Error ? err.message : String(err) });
+    res.json({ success: true, config: null, source: 'fallback' });
   }
 });
 
 // POST /api/cloudsql/carteirinhas/config/save
 router.post('/carteirinhas/config/save', async (req: Request, res: Response) => {
   try {
+    try { await ensureSchema(); } catch {}
     const configData = req.body.config || req.body;
     if (!configData || typeof configData !== 'object') {
       return res.status(400).json({ error: 'Config object required' });
@@ -1583,10 +1585,11 @@ router.post('/carteirinhas/config/save', async (req: Request, res: Response) => 
 // GET /api/cloudsql/carteirinhas/credentials
 router.get('/carteirinhas/credentials', async (_req: Request, res: Response) => {
   try {
+    try { await ensureSchema(); } catch {}
     const list = await db.select().from(schema.carteirinhas);
     res.json({ success: true, carteirinhas: list });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to list carteirinhas', details: err instanceof Error ? err.message : String(err) });
+    res.json({ success: true, carteirinhas: [], source: 'fallback' });
   }
 });
 
@@ -1602,6 +1605,13 @@ router.post('/carteirinhas/credentials/save', async (req: Request, res: Response
     const entityType = cred.entityType || (id.startsWith('student-') ? 'student' : 'user');
     const entityId = String(cred.entityId || cred.userId || id.replace(/^(user-|student-)/, ''));
 
+    const host = req.headers.host || 'arenadocompetidor.com';
+    const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
+    const defaultOrigin = `${proto}://${host}`;
+    const dynamicQrToken = (cred.qrToken && !cred.qrToken.includes('arenadocompetidor.ai.studio'))
+      ? cred.qrToken
+      : `${defaultOrigin}/verify/card/${cred.credentialId}`;
+
     const recordPayload = {
       id,
       credentialId: String(cred.credentialId).trim(),
@@ -1615,7 +1625,7 @@ router.post('/carteirinhas/credentials/save', async (req: Request, res: Response
       status: cred.status || 'ativo',
       validade: cred.validade || 'DEZ/2027',
       registro: cred.registro || '',
-      qrToken: cred.qrToken || `https://arenadocompetidor.ai.studio/verify/card/${cred.credentialId}`,
+      qrToken: dynamicQrToken,
       rawCarteirinha: cred,
       updatedAt: new Date(),
     };
@@ -1685,10 +1695,11 @@ router.post('/carteirinhas/status/update', async (req: Request, res: Response) =
 // GET /api/cloudsql/carteirinhas/logs
 router.get('/carteirinhas/logs', async (_req: Request, res: Response) => {
   try {
+    try { await ensureSchema(); } catch {}
     const logs = await db.select().from(schema.carteirinhaLogs).limit(100);
     res.json({ success: true, logs });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to read logs', details: err instanceof Error ? err.message : String(err) });
+    res.json({ success: true, logs: [], source: 'fallback' });
   }
 });
 
@@ -1715,10 +1726,13 @@ router.post('/carteirinhas/logs/add', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/cloudsql/credentials/verify and /api/cloudsql/carteirinhas/verify
+// POST & GET /api/cloudsql/credentials/verify and /api/cloudsql/carteirinhas/verify
 const handleVerification = async (req: Request, res: Response) => {
   try {
-    const rawCode = String(req.body.code || req.body.authCode || req.body.credentialId || '').trim();
+    try { await ensureSchema(); } catch {}
+
+    const queryVal = req.method === 'GET' ? (req.query.code || req.query.credentialId || req.query.id || req.query.authCode) : (req.body.code || req.body.authCode || req.body.credentialId);
+    const rawCode = String(queryVal || '').trim();
     if (!rawCode) {
       return res.status(400).json({ success: false, message: '✕ CÓDIGO DE AUTENTICAÇÃO NÃO ENCONTRADO' });
     }
@@ -1727,6 +1741,12 @@ const handleVerification = async (req: Request, res: Response) => {
     if (rawCode.includes('/verify/card/')) {
       const parts = rawCode.split('/verify/card/');
       targetCode = parts[parts.length - 1].trim();
+    } else if (rawCode.includes('/carteirinha/')) {
+      const parts = rawCode.split('/carteirinha/');
+      targetCode = parts[parts.length - 1].trim();
+    } else if (rawCode.includes('verify=')) {
+      const parts = rawCode.split('verify=');
+      targetCode = parts[1].split('&')[0].trim();
     }
 
     const cleanTarget = targetCode.toUpperCase().replace(/\s+/g, '');
@@ -1913,7 +1933,11 @@ const handleVerification = async (req: Request, res: Response) => {
 };
 
 router.post('/credentials/verify', handleVerification);
+router.get('/credentials/verify', handleVerification);
 router.post('/carteirinhas/verify', handleVerification);
+router.get('/carteirinhas/verify', handleVerification);
+router.post('/verify/card', handleVerification);
+router.get('/verify/card', handleVerification);
 
 // --- 6. GOOGLE CONTACTS & CALENDAR INTEGRATION ENDPOINTS ---
 router.get('/contacts/sync-db', requireAuth, async (req: AuthRequest, res: Response) => {

@@ -124,7 +124,7 @@ export async function syncCarteirinhaDataFromCloudSQL(): Promise<void> {
             status: item.status || raw.status || 'ativo',
             validade: item.validade || raw.validade || 'DEZ/2027',
             registro: item.registro || raw.registro,
-            qrToken: item.qrToken || raw.qrToken || `https://arenadocompetidor.ai.studio/verify/card/${item.credentialId}`,
+            qrToken: item.qrToken || raw.qrToken || getCarteirinhaVerifyUrl(item.credentialId),
             createdAt: item.createdAt || raw.createdAt || new Date().toISOString(),
             updatedAt: item.updatedAt || raw.updatedAt || new Date().toISOString(),
           };
@@ -149,6 +149,18 @@ export async function syncCarteirinhaDataFromCloudSQL(): Promise<void> {
   } finally {
     isCloudSqlSyncInProgress = false;
   }
+}
+
+export function getCarteirinhaVerifyUrl(credentialId: string, customOrigin?: string): string {
+  const cleanId = (credentialId || '').trim();
+  if (customOrigin) {
+    const cleanOrigin = customOrigin.replace(/\/+$/, '');
+    return `${cleanOrigin}/verify/card/${cleanId}`;
+  }
+  if (typeof window !== 'undefined' && window.location && window.location.origin) {
+    return `${window.location.origin}/verify/card/${cleanId}`;
+  }
+  return `/verify/card/${cleanId}`;
 }
 
 export function getCarteirinhaConfig(): CarteirinhaConfig {
@@ -355,7 +367,7 @@ export function auditAndDeduplicateCredentials(): AuditCredentialsResult {
       cleanedMap[key] = {
         ...cred,
         id: key,
-        qrToken: `https://arenadocompetidor.ai.studio/verify/card/${currentCredentialId}`,
+        qrToken: getCarteirinhaVerifyUrl(currentCredentialId),
       };
       preservedIntact++;
     } else {
@@ -379,7 +391,7 @@ export function auditAndDeduplicateCredentials(): AuditCredentialsResult {
         id: key,
         credentialId: currentCredentialId,
         authCode: currentAuthCode,
-        qrToken: `https://arenadocompetidor.ai.studio/verify/card/${currentCredentialId}`,
+        qrToken: getCarteirinhaVerifyUrl(currentCredentialId),
         updatedAt: new Date().toISOString(),
       };
 
@@ -460,7 +472,7 @@ export function getOrCreateUserCredential(
     const latestNome = userNome || existing.userNome;
     const latestTipo = userTipo || existing.userTipo;
     const latestFoto = userFoto || existing.fotoPerfil;
-    const expectedQrToken = `https://arenadocompetidor.ai.studio/verify/card/${existing.credentialId}`;
+    const expectedQrToken = getCarteirinhaVerifyUrl(existing.credentialId);
 
     if (latestNome && existing.userNome !== latestNome) {
       existing.userNome = latestNome;
@@ -518,7 +530,7 @@ export function getOrCreateUserCredential(
     authCode = `ACBJJ-${h1.substring(0, 4)}-${h2.substring(0, 4)}`;
   }
 
-  const qrToken = `https://arenadocompetidor.ai.studio/verify/card/${credentialId}`;
+  const qrToken = getCarteirinhaVerifyUrl(credentialId);
 
   const newCredential: CarteirinhaCredential = {
     id: key,

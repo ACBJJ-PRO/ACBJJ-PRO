@@ -419,7 +419,7 @@ export async function migrateDataToCloudSQL(sourceData: Record<string, any>) {
             status: c.status || 'ativo',
             validade: c.validade || 'DEZ/2027',
             registro: c.registro || null,
-            qrToken: c.qrToken || `https://arenadocompetidor.ai.studio/verify/card/${credentialId}`,
+            qrToken: (c.qrToken && !c.qrToken.includes('arenadocompetidor.ai.studio')) ? c.qrToken : `/verify/card/${credentialId}`,
             rawCarteirinha: typeof c === 'object' ? c : { val: c },
           })
           .onConflictDoUpdate({
@@ -434,7 +434,7 @@ export async function migrateDataToCloudSQL(sourceData: Record<string, any>) {
               status: c.status || 'ativo',
               validade: c.validade || 'DEZ/2027',
               registro: c.registro || null,
-              qrToken: c.qrToken || `https://arenadocompetidor.ai.studio/verify/card/${credentialId}`,
+              qrToken: (c.qrToken && !c.qrToken.includes('arenadocompetidor.ai.studio')) ? c.qrToken : `/verify/card/${credentialId}`,
               rawCarteirinha: typeof c === 'object' ? c : { val: c },
               updatedAt: new Date(),
             },

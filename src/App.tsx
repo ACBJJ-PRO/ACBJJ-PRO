@@ -78,6 +78,7 @@ import EvolucaoEmpresarialPane from './components/EvolucaoEmpresarialPane';
 import PlacarModuleGuard from './components/PlacarModuleGuard';
 import ProfessorUriCruzPane from './components/ProfessorUriCruzPane';
 import CentralPublicidadePane from './components/CentralPublicidadePane';
+import PublicCardVerificationModal from './components/PublicCardVerificationModal';
 import { getCarteirinhaConfig, getUserCarteirinhaData } from './utils/carteirinhaUtils';
 
 import { fetchFirestoreState, subscribeToFirestoreState, updateFirestoreStateKey } from './lib/firebase';
@@ -404,6 +405,25 @@ export function sanitizeProfName(pName?: string): string {
 }
 
 export default function App() {
+  const [publicVerificationCode, setPublicVerificationCode] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const path = window.location.pathname;
+    if (path.startsWith('/verify/card/')) {
+      return path.replace('/verify/card/', '').trim();
+    }
+    if (path.startsWith('/carteirinha/')) {
+      return path.replace('/carteirinha/', '').trim();
+    }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('verify')) {
+      return params.get('verify')!.trim();
+    }
+    if (params.get('code')) {
+      return params.get('code')!.trim();
+    }
+    return null;
+  });
+
   // --- REAL-TIME SYNC ENGINE ---
   const initialMountRef = useRef<{ [key: string]: boolean }>({});
   const hasInitialFetchedRef = useRef(false);
@@ -6077,6 +6097,21 @@ export default function App() {
       {showInternalAiCentral && (
         <AiCentralModal
           onClose={() => setShowInternalAiCentral(false)}
+          currentUser={usuarioLogado}
+        />
+      )}
+
+      {publicVerificationCode && (
+        <PublicCardVerificationModal
+          code={publicVerificationCode}
+          onClose={() => {
+            setPublicVerificationCode(null);
+            if (typeof window !== 'undefined' && window.history) {
+              window.history.replaceState({}, '', '/');
+            }
+          }}
+          usuarios={usuarios}
+          alunos={alunos}
           currentUser={usuarioLogado}
         />
       )}
