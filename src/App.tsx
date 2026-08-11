@@ -409,10 +409,12 @@ export default function App() {
     if (typeof window === 'undefined') return null;
     const path = window.location.pathname;
     if (path.startsWith('/verify/card/')) {
-      return path.replace('/verify/card/', '').trim();
+      const raw = decodeURIComponent(path.replace('/verify/card/', ''));
+      return raw.split('?')[0].split('#')[0].replace(/\/+$/, '').trim();
     }
     if (path.startsWith('/carteirinha/')) {
-      return path.replace('/carteirinha/', '').trim();
+      const raw = decodeURIComponent(path.replace('/carteirinha/', ''));
+      return raw.split('?')[0].split('#')[0].replace(/\/+$/, '').trim();
     }
     const params = new URLSearchParams(window.location.search);
     if (params.get('verify')) {

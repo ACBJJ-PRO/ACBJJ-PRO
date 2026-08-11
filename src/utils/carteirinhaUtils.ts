@@ -381,8 +381,9 @@ export function auditAndDeduplicateCredentials(): AuditCredentialsResult {
         attempt++;
         const h1 = simpleHash(`audit1-key-${key}-att-${attempt}`).toString(36).toUpperCase().padStart(4, '7');
         const h2 = simpleHash(`audit2-key-${key}-att-${attempt}`).toString(36).toUpperCase().padStart(4, '9');
-        const cleanKey = String(key).replace(/[^a-zA-Z0-9]/g, '');
-        currentCredentialId = `CARD-${cleanKey.padStart(4, '0').slice(-4)}-${h1.substring(0, 4)}`;
+        const cleanKey = String(key).replace(/\D/g, '') || String(key).replace(/[^a-zA-Z0-9]/g, '');
+        const entityDigits = cleanKey.replace(/\D/g, '') || '0';
+        currentCredentialId = `CARD-${entityDigits.padStart(4, '0').slice(-4)}-${h1.substring(0, 4)}`;
         currentAuthCode = `ACBJJ-${h1.substring(0, 4)}-${h2.substring(0, 4)}`;
       }
 
@@ -662,7 +663,15 @@ export function verifyCredentialQuery(
   if (targetCode.includes('/verify/card/')) {
     const parts = targetCode.split('/verify/card/');
     targetCode = parts[parts.length - 1].trim();
+  } else if (targetCode.includes('/carteirinha/')) {
+    const parts = targetCode.split('/carteirinha/');
+    targetCode = parts[parts.length - 1].trim();
+  } else if (targetCode.includes('verify=')) {
+    const parts = targetCode.split('verify=');
+    targetCode = parts[1].trim();
   }
+  // Strip query strings, hash parameters, and trailing slashes
+  targetCode = targetCode.split('?')[0].split('&')[0].split('#')[0].replace(/\/+$/, '').trim();
 
   const cleanQuery = targetCode.toUpperCase().replace(/\s+/g, '');
   const strippedQuery = cleanQuery.replace(/[^A-Z0-9]/g, '');
@@ -767,6 +776,49 @@ export function verifyCredentialQuery(
         c.id === `student-${strippedQuery}`
       );
     });
+  }
+
+  // Search Strategy 6: Hash Part Cross-Match (e.g. V0C8 present in both CARD-0004-V0C8 and ACBJJ-V0C8-AAWX)
+  if (!matched) {
+    const parts = cleanQuery.split(/[-_]/).filter(Boolean);
+    let extractedHash = '';
+    if (cleanQuery.startsWith('CARD') && parts.length >= 3) {
+      extractedHash = parts[parts.length - 1];
+    } else if (cleanQuery.startsWith('ACBJJ') && parts.length >= 3) {
+      extractedHash = parts[1];
+    } else {
+      const matchHash = cleanQuery.match(/([A-Z0-9]{4})$/);
+      if (matchHash) extractedHash = matchHash[1];
+    }
+
+    if (extractedHash && extractedHash.length === 4) {
+      matched = credentialsList.find((c) => {
+        const cId = (c.credentialId || '').toUpperCase();
+        const cAuth = (c.authCode || '').toUpperCase();
+        return cId.includes(extractedHash) || cAuth.includes(extractedHash);
+      });
+    }
+  }
+
+  // Search Strategy 7: Entity Numeric ID Resolution Fallback (e.g. CARD-0004-V0C8 -> entityId 4)
+  if (!matched) {
+    const entityDigits = cleanQuery.replace(/\D/g, '');
+    if (entityDigits) {
+      const numId = parseInt(entityDigits, 10);
+      const foundUser = allUsuarios.find(
+        (u) => u.id === numId || String(u.id) === entityDigits || String(u.id) === String(numId)
+      );
+      if (foundUser) {
+        matched = getOrCreateUserCredential('user', foundUser.id, foundUser, null);
+      } else {
+        const foundStudent = allAlunos.find(
+          (a) => a.id === numId || String(a.id) === entityDigits || String(a.id) === String(numId)
+        );
+        if (foundStudent) {
+          matched = getOrCreateUserCredential('student', foundStudent.id, null, foundStudent);
+        }
+      }
+    }
   }
 
   const detectedType = cleanQuery.startsWith('ACBJJ')
