@@ -321,15 +321,15 @@ export default function LoginScreen({
 
       // Handle specific status codes with user-friendly Portuguese error messages
       if (response.status === 400) {
-        alert(data?.error || 'Dados de entrada inválidos. Por favor, informe o CPF e a senha.');
+        alert(data?.message || data?.error || 'Dados de entrada inválidos. Por favor, informe o CPF e a senha.');
       } else if (response.status === 401) {
-        alert(data?.error || 'CPF ou senha inválidos.');
+        alert(data?.message || data?.error || 'CPF ou senha inválidos.');
       } else if (response.status === 403) {
-        alert(data?.error || 'Seu cadastro foi realizado com sucesso, porém sua conta ainda está aguardando aprovação do administrador. Aguarde a liberação para acessar o sistema.');
+        alert(data?.message || data?.error || 'Seu cadastro foi realizado com sucesso, porém sua conta ainda está aguardando aprovação do administrador. Aguarde a liberação para acessar o sistema.');
       } else if (response.status === 500 || response.status === 502 || response.status === 503) {
         alert(data?.message || data?.error || 'Erro interno de autenticação. Tente novamente.');
       } else {
-        alert(data?.error || data?.message || 'Erro de conexão ao autenticar. Tente novamente.');
+        alert(data?.message || data?.error || 'Erro de conexão ao autenticar. Tente novamente.');
       }
     } catch (err) {
       console.error('[LoginScreen] Connection error during login request:', err);

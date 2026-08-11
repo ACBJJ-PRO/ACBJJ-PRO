@@ -48,113 +48,113 @@ function getCaCertificate(): string | undefined {
   return cert;
 }
 
+function createDummyPool(reason: string) {
+  const dummy: any = {
+    options: {},
+    on: () => dummy,
+    removeListener: () => dummy,
+    query: () => Promise.reject(new Error(reason)),
+    connect: () => Promise.reject(new Error(reason)),
+    end: () => Promise.resolve(),
+  };
+  return dummy;
+}
+
 export const createPool = () => {
-  if (connectionString) {
-    let cleanConnectionString = connectionString;
-    const ca = getCaCertificate();
+  try {
+    if (connectionString) {
+      let cleanConnectionString = connectionString;
+      const ca = getCaCertificate();
 
-    let host = '';
-    let port = 5432;
-    let database = '';
-    let user: string | undefined = undefined;
-    let password: string | undefined = undefined;
+      let host = '';
+      let port = 5432;
+      let database = '';
+      let user: string | undefined = undefined;
+      let password: string | undefined = undefined;
 
-    try {
-      const parsed = new URL(connectionString);
-      host = parsed.hostname;
-      port = parsed.port ? Number(parsed.port) : 5432;
-      database = parsed.pathname.replace(/^\//, '') || 'postgres';
-      user = parsed.username ? decodeURIComponent(parsed.username) : undefined;
-      password = parsed.password ? decodeURIComponent(parsed.password) : undefined;
+      try {
+        const parsed = new URL(connectionString);
+        host = parsed.hostname;
+        port = parsed.port ? Number(parsed.port) : 5432;
+        database = parsed.pathname.replace(/^\//, '') || 'postgres';
+        user = parsed.username ? decodeURIComponent(parsed.username) : undefined;
+        password = parsed.password ? decodeURIComponent(parsed.password) : undefined;
 
-      // Always strip ssl* query parameters (sslmode, sslrootcert, sslcert, sslkey)
-      // from the URL so pg-connection-string does NOT override our explicit ssl configuration.
-      const paramsToDelete: string[] = [];
-      for (const key of parsed.searchParams.keys()) {
-        if (key.toLowerCase().startsWith('ssl')) {
-          paramsToDelete.push(key);
+        const paramsToDelete: string[] = [];
+        for (const key of parsed.searchParams.keys()) {
+          if (key.toLowerCase().startsWith('ssl')) {
+            paramsToDelete.push(key);
+          }
         }
-      }
-      for (const param of paramsToDelete) {
-        parsed.searchParams.delete(param);
-      }
-      cleanConnectionString = parsed.toString();
-    } catch {}
+        for (const param of paramsToDelete) {
+          parsed.searchParams.delete(param);
+        }
+        cleanConnectionString = parsed.toString();
+      } catch {}
 
-    if (host === '127.0.0.1' || host === 'localhost' || host === '::1') {
-      throw new Error('[Cloud SQL Error] DATABASE_URL points to localhost/127.0.0.1.');
+      if (host === '127.0.0.1' || host === 'localhost' || host === '::1') {
+        console.warn('[Cloud SQL Notice] DATABASE_URL points to localhost/127.0.0.1. Using fallback pool.');
+        return createDummyPool('DATABASE_URL points to localhost/127.0.0.1');
+      }
+
+      const ssl = process.env.SQL_SSL === 'false'
+        ? false
+        : ca
+        ? {
+            rejectUnauthorized: true,
+            ca,
+            checkServerIdentity: (targetHost: string, cert: tls.PeerCertificate) => {
+              const err = tls.checkServerIdentity(targetHost, cert);
+              if (!err) return undefined;
+              const altnames = cert.subjectaltname || '';
+              const cn = cert.subject?.CN || '';
+              if (
+                altnames.includes('.sql.goog') ||
+                cn.includes('.sql.goog') ||
+                (host && (altnames.includes(host) || cn.includes(host)))
+              ) {
+                return undefined;
+              }
+              return err;
+            },
+          }
+        : { rejectUnauthorized: false };
+
+      console.log(`[Cloud SQL Pool] Initializing via DATABASE_URL target (host=${host}, port=${port}, database=${database}, customCa=${Boolean(ca)})`);
+
+      return new Pool({
+        host: host || undefined,
+        port: port || 5432,
+        database: database || undefined,
+        user: user || undefined,
+        password: password || undefined,
+        connectionString: cleanConnectionString,
+        ssl,
+        connectionTimeoutMillis: 8000,
+        idleTimeoutMillis: 10000,
+        max: 5,
+        keepAlive: true,
+        allowExitOnIdle: true,
+      });
     }
-
-    const ssl = process.env.SQL_SSL === 'false'
-      ? false
-      : ca
-      ? {
-          rejectUnauthorized: true,
-          ca,
-          checkServerIdentity: (targetHost: string, cert: tls.PeerCertificate) => {
-            // 1. Standard Node.js hostname verification
-            const err = tls.checkServerIdentity(targetHost, cert);
-            if (!err) return undefined;
-
-            // 2. If connecting via IP or hostname differs from SAN, verify that the server certificate
-            // was issued for Google Cloud SQL (*.sql.goog in SAN or CN) or matches target host.
-            // Cryptographic CA validation is strictly enforced by rejectUnauthorized: true and ca.
-            const altnames = cert.subjectaltname || '';
-            const cn = cert.subject?.CN || '';
-            if (
-              altnames.includes('.sql.goog') ||
-              cn.includes('.sql.goog') ||
-              (host && (altnames.includes(host) || cn.includes(host)))
-            ) {
-              return undefined;
-            }
-
-            return err;
-          },
-        }
-      : { rejectUnauthorized: false };
-
-    console.log(`[Cloud SQL Pool] Initializing via DATABASE_URL target (host=${host}, port=${port}, database=${database}, customCa=${Boolean(ca)})`);
-
-    return new Pool({
-      host: host || undefined,
-      port: port || 5432,
-      database: database || undefined,
-      user: user || undefined,
-      password: password || undefined,
-      connectionString: cleanConnectionString,
-      ssl,
-      connectionTimeoutMillis: 8000,
-      idleTimeoutMillis: 10000,
-      max: 5,
-      keepAlive: true,
-      allowExitOnIdle: true,
-    });
+  } catch (err: any) {
+    console.warn('[Cloud SQL Pool Init Notice]:', err?.message || err);
+    return createDummyPool(err?.message || 'Database initialization error');
   }
 
   console.log('[Cloud SQL Pool] DATABASE_URL is not configured.');
-
-  const unconfiguredPool = new Pool({
-    host: 'unconfigured.local',
-    connectionTimeoutMillis: 100,
-  });
-
-  unconfiguredPool.query = (() => {
-    return Promise.reject(new Error('DATABASE_URL is not configured'));
-  }) as any;
-
-  unconfiguredPool.connect = (() => {
-    return Promise.reject(new Error('DATABASE_URL is not configured'));
-  }) as any;
-
-  return unconfiguredPool;
+  return createDummyPool('DATABASE_URL is not configured');
 };
 
 export const pool = createPool();
 
-pool.on('error', (err) => {
-  console.error('Unexpected error on idle SQL pool client:', err?.message || String(err));
-});
+try {
+  if (pool && typeof pool.on === 'function') {
+    pool.on('error', (err: any) => {
+      console.error('Unexpected error on idle SQL pool client:', err?.message || String(err));
+    });
+  }
+} catch {}
 
 let schemaPromise: Promise<void> | null = null;
 let lastSchemaErrorTime = 0;

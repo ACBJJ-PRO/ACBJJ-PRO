@@ -3,6 +3,15 @@ import express from 'express';
 import { dbRoutesRouter } from '../_lib/db-routes.js';
 
 const app = express();
+
+// Prevent body-parser from hanging on pre-parsed Vercel req.body
+app.use((req, _res, next) => {
+  if (req.body && typeof req.body === 'object') {
+    (req as any)._body = true;
+  }
+  next();
+});
+
 app.use(express.json({ limit: '10mb' }));
 
 app.use('/api', (req, res, next) => {
