@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "ArenaStateItem": {
+      "title": "Arena State Item",
+      "description": "Global application state item stored by key",
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "description": "JSON serialized or primitive value of the state key"
+        },
+        "updatedAt": {
+          "type": "number",
+          "description": "Timestamp of last update"
+        }
+      },
+      "required": ["updatedAt"]
+    },
+    "UserEntity": {
+      "title": "User",
+      "description": "System user account profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nome": { "type": "string" },
+        "email": { "type": "string" },
+        "perfil": { "type": "string" }
+      }
+    },
+    "ContractEntity": {
+      "title": "Official Contract",
+      "description": "Institutional regulation or contract document",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "titulo": { "type": "string" },
+        "versao": { "type": "string" },
+        "status": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/arena_state/{key}": {
+      "schema": "ArenaStateItem",
+      "description": "Collection storing application global state key-value pairs"
+    },
+    "/arena_app/{docId}": {
+      "schema": "ArenaStateItem",
+      "description": "Legacy collection storing application state"
+    },
+    "/usuarios/{userId}": {
+      "schema": "UserEntity",
+      "description": "User profile collection"
+    },
+    "/contratos/{contratoId}": {
+      "schema": "ContractEntity",
+      "description": "Official contract repository"
+    },
+    "/contratos_aceites/{aceiteId}": {
+      "schema": "ArenaStateItem",
+      "description": "Digital signatures and audit acceptance records"
+    },
+    "/patrocinios/{patrocinioId}": {
+      "schema": "ArenaStateItem",
+      "description": "Sponsored advertising banners and links"
+    },
+    "/graduacoes/{graduacaoId}": {
+      "schema": "ArenaStateItem",
+      "description": "Student belt graduation history"
+    },
+    "/checkins/{checkinId}": {
+      "schema": "ArenaStateItem",
+      "description": "Class attendance check-ins"
+    },
+    "/eventos/{eventoId}": {
+      "schema": "ArenaStateItem",
+      "description": "Calendar events and seminars"
+    }
+  }
+}

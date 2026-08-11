@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" width="900" height="600">
+  <!-- Red background stripes (rows 2 and 4) -->
+  <rect width="900" height="600" fill="#0028a5"/>
+  <rect y="0" width="900" height="150" fill="#ffffff"/>
+  <rect y="150" width="900" height="150" fill="#d52b1e"/>
+  <rect y="300" width="900" height="150" fill="#ffffff"/>
+  <rect y="450" width="900" height="150" fill="#d52b1e"/>
+  <!-- Blue canton (top-left 2 rows x 1/2 width) -->
+  <rect x="0" y="0" width="450" height="300" fill="#0028a5"/>
+  <!-- White equilateral triangle in blue canton -->
+  <polygon points="225,40 70,260 380,260" fill="#ffffff"/>
+</svg>

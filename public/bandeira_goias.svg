@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1000 700" width="1000" height="700">
+  <defs>
+    <!-- 5-pointed star centered at (0,0) -->
+    <g id="star5">
+      <polygon points="0,-42 12.3,-13.0 43.6,-13.0 18.2,5.5 27.9,36.8 0,16.5 -27.9,36.8 -18.2,5.5 -43.6,-13.0 -12.3,-13.0" fill="#ffffff"/>
+    </g>
+    <g id="star5-small">
+      <polygon points="0,-30 8.8,-9.3 31.1,-9.3 13.0,3.9 19.9,26.3 0,11.8 -19.9,26.3 -13.0,3.9 -31.1,-9.3 -8.8,-9.3" fill="#ffffff"/>
+    </g>
+  </defs>
+
+  <!-- 8 horizontal stripes alternating green and yellow -->
+  <!-- 1. Green -->
+  <rect x="0" y="0" width="1000" height="87.5" fill="#008037"/>
+  <!-- 2. Yellow -->
+  <rect x="0" y="87.5" width="1000" height="87.5" fill="#fecb00"/>
+  <!-- 3. Green -->
+  <rect x="0" y="175" width="1000" height="87.5" fill="#008037"/>
+  <!-- 4. Yellow -->
+  <rect x="0" y="262.5" width="1000" height="87.5" fill="#fecb00"/>
+  <!-- 5. Green -->
+  <rect x="0" y="350" width="1000" height="87.5" fill="#008037"/>
+  <!-- 6. Yellow -->
+  <rect x="0" y="437.5" width="1000" height="87.5" fill="#fecb00"/>
+  <!-- 7. Green -->
+  <rect x="0" y="525" width="1000" height="87.5" fill="#008037"/>
+  <!-- 8. Yellow -->
+  <rect x="0" y="612.5" width="1000" height="87.5" fill="#fecb00"/>
+
+  <!-- Blue canton (top-left 4 stripes height = 350px, width = 340px) -->
+  <rect x="0" y="0" width="340" height="350" fill="#0047bb"/>
+
+  <!-- 5 stars of Cruzeiro do Sul -->
+  <use href="#star5" x="90" y="90"/>
+  <use href="#star5" x="250" y="90"/>
+  <use href="#star5" x="90" y="260"/>
+  <use href="#star5" x="250" y="260"/>
+  <use href="#star5-small" x="170" y="175"/>
+</svg>

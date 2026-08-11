@@ -1,0 +1,158 @@
+{
+  "id": "com.arenadocompetidor.app",
+  "name": "Arena do Competidor",
+  "short_name": "ACBJJ",
+  "description": "Sistema oficial de gestão de eventos, carteirinha digital, placar e cronômetro de Jiu-Jitsu ACBJJ PRO.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "window-controls-overlay", "minimal-ui", "tabbed"],
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "orientation": "any",
+  "categories": ["sports", "utilities", "productivity", "management"],
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "iarc_rating_id": "e84b3e59-a6e0-47d3-b261-267d31298418",
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon-16x16.png",
+      "sizes": "16x16",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Arena do Competidor no Computador"
+    },
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Arena do Competidor no Celular"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Carteirinha Digital",
+      "short_name": "Carteirinha",
+      "description": "Visualizar carteirinha oficial do atleta",
+      "url": "/?tab=minhaCarteirinha",
+      "icons": [
+        {
+          "src": "/icon-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Check-in de Aulas",
+      "short_name": "Check-in",
+      "description": "Fazer check-in rápido no treino",
+      "url": "/?tab=checkin",
+      "icons": [
+        {
+          "src": "/icon-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Rankings e Atletas",
+      "short_name": "Rankings",
+      "description": "Consultar ranking e chaveamentos",
+      "url": "/?tab=rankings",
+      "icons": [
+        {
+          "src": "/icon-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "file_handlers": [
+    {
+      "action": "/",
+      "name": "Arquivos da Arena do Competidor",
+      "accept": {
+        "application/json": [".json"]
+      }
+    }
+  ],
+  "protocol_handlers": [
+    {
+      "protocol": "web+arenacbjj",
+      "url": "/?protocol=%s"
+    }
+  ],
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "handle_links": "preferred",
+  "scope_extensions": [
+    {
+      "type": "origin",
+      "origin": "https://arenadocompetidor.ai.studio"
+    }
+  ]
+}

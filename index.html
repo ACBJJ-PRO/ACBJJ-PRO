@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="pt-BR" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+    
+    <!-- Title & Basic Metadata -->
+    <title>Arena do Competidor</title>
+    <meta name="description" content="Sistema oficial de gestão de eventos, carteirinha digital, placar e cronômetro de Jiu-Jitsu ACBJJ PRO." />
+    <meta name="application-name" content="ACBJJ" />
+    <meta name="author" content="ACBJJ PRO" />
+    <meta name="categories" content="sports, utilities, productivity" />
+
+    <!-- PWA Primary Colors & Display Settings -->
+    <meta name="theme-color" content="#0a0a0a" />
+    <meta name="background-color" content="#0a0a0a" />
+
+    <!-- Mobile Web App Capable (Android / Chromium) -->
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- Apple iOS Web App Capabilities -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ACBJJ" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+    <!-- Windows Tile & MS Application -->
+    <meta name="msapplication-TileColor" content="#0a0a0a" />
+    <meta name="msapplication-TileImage" content="/icon-192x192.png" />
+    <meta name="msapplication-tap-highlight" content="no" />
+
+    <!-- Favicons & Icons -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192x192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512x512.png" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Manifest Links -->
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="alternate" type="application/json+oembed" href="/manifest.json" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:ital,wght@0,700;0,800;0,900;1,800&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+      // Suprime erros benignos de conexão do WebSocket/HMR do Vite no ambiente sandbox do AI Studio
+      window.addEventListener('error', function(e) {
+        var msg = e.message || '';
+        if (msg.toLowerCase().includes('websocket') || msg.toLowerCase().includes('vite') || msg.toLowerCase().includes('hmr')) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function(e) {
+        var msg = (e.reason && e.reason.message) || (typeof e.reason === 'string' ? e.reason : '');
+        if (msg.toLowerCase().includes('websocket') || msg.toLowerCase().includes('vite') || msg.toLowerCase().includes('hmr')) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
+    </script>
+  </head>
+  <body class="bg-[#0a0a0a] text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
