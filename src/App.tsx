@@ -36,6 +36,7 @@ import {
 } from './types';
 import { CONTRATOS_INICIAIS } from './data/contratosOficiais';
 import { stableStringify, getStableNumericId } from './utils/stableStringify';
+import { getAuthHeaders } from './utils/authHeaders';
 import {
   INITIAL_USERS,
   INITIAL_STUDENTS,
@@ -467,7 +468,7 @@ export default function App() {
     try {
       const res = await fetch('/api/update-state', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ key, data: cleanVal }),
       });
       if (!res.ok) {
@@ -1102,7 +1103,7 @@ export default function App() {
     try {
       const res = await fetch('/api/update-state', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ key: 'exibirPublicidadeAdmin', data: newVal }),
       });
       if (!res.ok) {
@@ -1167,7 +1168,7 @@ export default function App() {
     try {
       const res = await fetch('/api/cloudsql/mensalidades/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ mensalidade: m }),
       });
       const data = await res.json();
@@ -1194,7 +1195,10 @@ export default function App() {
 
   const handleExcluirMensalidade = async (id: string): Promise<boolean> => {
     try {
-      const res = await fetch(`/api/cloudsql/mensalidades/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/cloudsql/mensalidades/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || 'Erro ao excluir mensalidade');
@@ -1212,7 +1216,7 @@ export default function App() {
     try {
       const res = await fetch(`/api/cloudsql/mensalidades/${id}/pagamento`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(details),
       });
       const data = await res.json();
@@ -1233,7 +1237,7 @@ export default function App() {
     try {
       const res = await fetch(`/api/cloudsql/mensalidades/${id}/cancelar`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ observacao }),
       });
       const data = await res.json();
@@ -1254,7 +1258,7 @@ export default function App() {
     try {
       const res = await fetch(`/api/cloudsql/mensalidades/${id}/estornar`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ observacao }),
       });
       const data = await res.json();
@@ -1487,6 +1491,7 @@ export default function App() {
     } catch (e) {
       console.warn(e);
     }
+    syncState('usuarios', usuarios);
   }, [usuarios]);
 
   useEffect(() => {
@@ -1495,6 +1500,7 @@ export default function App() {
     } catch (e) {
       console.warn(e);
     }
+    syncState('alunos', alunos);
   }, [alunos]);
 
   useEffect(() => {
@@ -1575,6 +1581,7 @@ export default function App() {
     } catch (e) {
       console.warn(e);
     }
+    syncState('noticias', noticias);
   }, [noticias]);
 
   useEffect(() => {
@@ -1583,6 +1590,7 @@ export default function App() {
     } catch (e) {
       console.warn(e);
     }
+    syncState('videos', videos);
   }, [videos]);
 
   useEffect(() => {
@@ -1591,6 +1599,7 @@ export default function App() {
     } catch (e) {
       console.warn(e);
     }
+    syncState('liveStreams', liveStreams);
   }, [liveStreams]);
 
   useEffect(() => {
@@ -2184,7 +2193,7 @@ export default function App() {
       if (approvedStudent) {
         fetch('/api/cloudsql/students/save', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify(approvedStudent),
         }).catch((err) => console.warn('Cloud SQL student checkin save notice:', err));
       }
@@ -2192,7 +2201,7 @@ export default function App() {
       // Direct Cloud SQL persistence
       fetch('/api/cloudsql/checkins/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(confirmedCheckin),
       }).catch((err) => console.error('Error persisting checkin approval:', err));
 
@@ -2216,7 +2225,7 @@ export default function App() {
       // Persist status as 'rejeitado' in Cloud SQL
       fetch('/api/cloudsql/checkins/status', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ id: checkinId, status: 'rejeitado' }),
       }).catch((err) => console.error('Error persisting checkin rejection:', err));
 
@@ -2274,7 +2283,7 @@ export default function App() {
     for (const stu of updatedStudentsList) {
       fetch('/api/cloudsql/students/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(stu),
       }).catch((err) => console.error('Error persisting updated student in batch approval:', err));
     }
@@ -2285,7 +2294,7 @@ export default function App() {
     for (const chk of approvedList) {
       fetch('/api/cloudsql/checkins/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(chk),
       }).catch((err) => console.error('Error persisting batch checkin approval:', err));
     }
@@ -2449,7 +2458,7 @@ export default function App() {
     // Save directly to Cloud SQL
     fetch('/api/cloudsql/checkins/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(newCheckin),
     }).catch((err) => console.error('Error persisting checkin request:', err));
 
@@ -2485,7 +2494,7 @@ export default function App() {
                   const updatedStu = { ...a, notaAvaliacao: acertos, mediaGeral: acertos };
                   fetch('/api/cloudsql/students/save', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify(updatedStu),
                   }).catch((err) => console.error('Error saving student grade in Cloud SQL:', err));
                   return updatedStu;
@@ -2497,7 +2506,7 @@ export default function App() {
 
           fetch('/api/cloudsql/exams/submit', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ examId: provaId, alunoId: currentStudent.id, respostas }),
           }).catch((err) => console.error('Error submitting exam to Cloud SQL:', err));
 
@@ -2581,14 +2590,14 @@ export default function App() {
     // Persist to Cloud SQL
     fetch('/api/cloudsql/students/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(novoAluno),
     }).catch((err) => console.warn('Cloud SQL student save err:', err));
 
     if (!existingUser) {
       fetch('/api/cloudsql/users/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           id: linkedUserId,
           uid: String(linkedUserId),
@@ -2613,7 +2622,7 @@ export default function App() {
 
     fetch('/api/cloudsql/students/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ ...student, ativo: newAtivo, status: newAtivo ? 'ativo' : 'inativo' }),
     }).catch((err) => console.warn('Cloud SQL student toggle status err:', err));
   };
@@ -2675,7 +2684,7 @@ export default function App() {
     const updatedStudentData = { ...targetStudent, ...cleanedFields };
     fetch('/api/cloudsql/students/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(updatedStudentData),
     }).catch((err) => console.warn('Cloud SQL student update save notice:', err));
 
@@ -2863,7 +2872,7 @@ export default function App() {
     const updatedUserData = { ...targetUser, ...cleanedFields };
     fetch('/api/cloudsql/users/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(updatedUserData),
     }).catch((err) => console.warn('Cloud SQL user update save notice:', err));
 
@@ -3002,7 +3011,7 @@ export default function App() {
         try {
           await fetch('/api/cloudsql/live-streams/save', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ liveStream: item }),
           });
         } catch (err) {
@@ -3061,7 +3070,7 @@ export default function App() {
     if (updatedStudent) {
       fetch('/api/cloudsql/students/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(updatedStudent),
       }).catch((err) => console.warn('Cloud SQL student medal update save notice:', err));
     }
@@ -3091,7 +3100,7 @@ export default function App() {
           const updated = { ...a, notaAvaliacao: media, mediaGeral: media };
           fetch('/api/cloudsql/students/save', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(updated),
           }).catch((err) => console.error('Error updating student evaluation grade in Cloud SQL:', err));
           return updated;
@@ -3125,7 +3134,7 @@ export default function App() {
 
     fetch('/api/cloudsql/checkins/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         ...recordWithId,
         usuarioId: recordWithId.usuarioId,
@@ -3158,7 +3167,7 @@ export default function App() {
     if (updatedRecord) {
       fetch('/api/cloudsql/checkins/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           ...(updatedRecord as ProfessorCheckinRecord),
           usuarioId: (updatedRecord as ProfessorCheckinRecord).usuarioId,
@@ -3193,7 +3202,7 @@ export default function App() {
     if (updatedRecord) {
       fetch('/api/cloudsql/checkins/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           ...(updatedRecord as ProfessorCheckinRecord),
           usuarioId: (updatedRecord as ProfessorCheckinRecord).usuarioId,
@@ -3219,7 +3228,7 @@ export default function App() {
 
     fetch('/api/cloudsql/exams/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(novaProva),
     }).catch((err) => console.error('Error saving exam to Cloud SQL:', err));
 
@@ -3300,7 +3309,7 @@ export default function App() {
           const updated = { ...a, faixa: faixaOutorgada, notaAvaliacao: null };
           fetch('/api/cloudsql/students/save', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(updated),
           }).catch((err) => console.error('Error saving student graduation in Cloud SQL:', err));
           return updated;
@@ -3335,7 +3344,7 @@ export default function App() {
     try {
       await fetch('/api/cloudsql/noticias/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ noticia: nova }),
       });
     } catch (err) {
@@ -3369,7 +3378,7 @@ export default function App() {
     try {
       await fetch('/api/cloudsql/videos/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ video: novo }),
       });
     } catch (err) {
@@ -3502,7 +3511,7 @@ export default function App() {
     // Persist approved status directly to Cloud SQL
     fetch('/api/cloudsql/users/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(updatedUser),
     }).catch((err) => console.warn('Cloud SQL user approve notice:', err));
 
@@ -3512,7 +3521,7 @@ export default function App() {
         const updatedStudent = { ...existingStudent, ativo: true, status: 'ativo' as const, dataAprovacao: existingStudent.dataAprovacao || todayStr };
         fetch('/api/cloudsql/students/save', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify(updatedStudent),
         }).catch((err) => console.warn('Cloud SQL student approve notice:', err));
       }
@@ -3569,7 +3578,7 @@ export default function App() {
           };
           fetch('/api/cloudsql/students/save', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(newStudent),
           }).catch((err) => console.warn('Cloud SQL new student approve notice:', err));
           return [...prevAlunos, newStudent];

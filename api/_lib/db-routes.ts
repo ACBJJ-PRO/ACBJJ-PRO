@@ -537,20 +537,10 @@ router.post('/users/save', requireAuth, async (req: AuthRequest, res: Response) 
       status: userStatus,
     } : user;
 
-    const result = await db.insert(schema.users)
-      .values({
-        uid,
-        email: user.email || `${uid}@arena.com`,
-        name: user.nome || user.name || 'Usuário Arena',
-        tipo: user.tipo || 'aluno',
-        perfilLabel: user.perfilLabel || null,
-        fotoPerfil: user.fotoPerfil || user.foto || null,
-        status: userStatus,
-        rawUser: updatedRawUser,
-      })
-      .onConflictDoUpdate({
-        target: schema.users.uid,
-        set: {
+    if (isDatabaseUrlConfigured) {
+      const result = await db.insert(schema.users)
+        .values({
+          uid,
           email: user.email || `${uid}@arena.com`,
           name: user.nome || user.name || 'Usuário Arena',
           tipo: user.tipo || 'aluno',
@@ -558,25 +548,39 @@ router.post('/users/save', requireAuth, async (req: AuthRequest, res: Response) 
           fotoPerfil: user.fotoPerfil || user.foto || null,
           status: userStatus,
           rawUser: updatedRawUser,
-          updatedAt: new Date(),
-        }
-      })
-      .returning();
+        })
+        .onConflictDoUpdate({
+          target: schema.users.uid,
+          set: {
+            email: user.email || `${uid}@arena.com`,
+            name: user.nome || user.name || 'Usuário Arena',
+            tipo: user.tipo || 'aluno',
+            perfilLabel: user.perfilLabel || null,
+            fotoPerfil: user.fotoPerfil || user.foto || null,
+            status: userStatus,
+            rawUser: updatedRawUser,
+            updatedAt: new Date(),
+          }
+        })
+        .returning();
 
-    // Audit Log with token-derived userUid
-    try {
-      await db.insert(schema.auditLogs).values({
-        id: `audit-user-${uid}-${Date.now()}`,
-        userId: authenticatedUser?.uid || uid,
-        acao: 'USUARIO_SALVO',
-        detalhe: `Usuário ${user.nome || user.name || uid} (${user.tipo || 'aluno'}) salvo no Cloud SQL por ${authenticatedUser?.uid || uid}`,
-        rawLog: { uid, email: user.email, tipo: user.tipo, status: userStatus, savedBy: authenticatedUser?.uid },
-      });
-    } catch (auditErr) {
-      console.warn('Non-blocking audit log error:', auditErr);
+      // Audit Log with token-derived userUid
+      try {
+        await db.insert(schema.auditLogs).values({
+          id: `audit-user-${uid}-${Date.now()}`,
+          userId: authenticatedUser?.uid || uid,
+          acao: 'USUARIO_SALVO',
+          detalhe: `Usuário ${user.nome || user.name || uid} (${user.tipo || 'aluno'}) salvo no Cloud SQL por ${authenticatedUser?.uid || uid}`,
+          rawLog: { uid, email: user.email, tipo: user.tipo, status: userStatus, savedBy: authenticatedUser?.uid },
+        });
+      } catch (auditErr) {
+        console.warn('Non-blocking audit log error:', auditErr);
+      }
+
+      return res.json({ success: true, user: result[0] });
     }
 
-    res.json({ success: true, user: result[0] });
+    res.json({ success: true, user: updatedRawUser });
   } catch (err) {
     res.status(500).json({ error: 'Failed to save user', details: err instanceof Error ? err.message : String(err) });
   }
@@ -585,19 +589,21 @@ router.post('/users/save', requireAuth, async (req: AuthRequest, res: Response) 
 router.delete('/users/:uid', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const { uid } = req.params;
-    await db.delete(schema.users).where(eq(schema.users.uid, uid));
+    if (isDatabaseUrlConfigured) {
+      await db.delete(schema.users).where(eq(schema.users.uid, uid));
 
-    // Audit Log
-    try {
-      await db.insert(schema.auditLogs).values({
-        id: `audit-del-user-${uid}-${Date.now()}`,
-        userId: req.user?.uid || 'system',
-        acao: 'USUARIO_EXCLUIDO',
-        detalhe: `Usuário UID ${uid} excluído do Cloud SQL por ${req.user?.uid || 'admin'}`,
-        rawLog: { uid, deletedBy: req.user?.uid },
-      });
-    } catch (auditErr) {
-      console.warn('Non-blocking audit log error:', auditErr);
+      // Audit Log
+      try {
+        await db.insert(schema.auditLogs).values({
+          id: `audit-del-user-${uid}-${Date.now()}`,
+          userId: req.user?.uid || 'system',
+          acao: 'USUARIO_EXCLUIDO',
+          detalhe: `Usuário UID ${uid} excluído do Cloud SQL por ${req.user?.uid || 'admin'}`,
+          rawLog: { uid, deletedBy: req.user?.uid },
+        });
+      } catch (auditErr) {
+        console.warn('Non-blocking audit log error:', auditErr);
+      }
     }
 
     res.json({ success: true });
@@ -666,22 +672,6 @@ router.post('/students/save', requireAuth, async (req: AuthRequest, res: Respons
       cleanCpf = digitsOnly;
     }
 
-    // CPF Duplicity check in PostgreSQL
-    if (cleanCpf && cleanCpf.length === 11) {
-      const existingWithCpf = await db.select().from(schema.alunos)
-        .where(and(
-          eq(schema.alunos.cpf, cleanCpf),
-          sql`${schema.alunos.id} != ${id}`
-        ));
-
-      if (existingWithCpf.length > 0) {
-        return res.status(409).json({
-          error: `CPF ${cleanCpf} já está cadastrado para outro aluno (${existingWithCpf[0].nome}).`,
-          code: 'DUPLICATE_CPF'
-        });
-      }
-    }
-
     const isActive = a.ativo === true || a.status === 'ativo' || a.aprovado === true;
     const studentStatus = isActive ? 'ativo' : (a.status || 'pendente');
     const updatedRawStudent = typeof a === 'object' ? {
@@ -691,27 +681,26 @@ router.post('/students/save', requireAuth, async (req: AuthRequest, res: Respons
       status: studentStatus,
     } : a;
 
-    const result = await db.insert(schema.alunos)
-      .values({
-        id,
-        userId: a.userId ? String(a.userId) : id,
-        nome: a.nome || 'Aluno Arena',
-        cpf: cleanCpf || a.cpf || null,
-        rg: a.rg || null,
-        email: a.email || null,
-        telefone: a.telefone || null,
-        dataNascimento: a.dataNascimento || null,
-        faixa: a.faixa || null,
-        graus: typeof a.graus === 'number' ? a.graus : 0,
-        status: studentStatus,
-        academias: a.academias || a.academia || null,
-        professorResponsavel: a.professorResponsavel || null,
-        fotoPerfil: a.fotoPerfil || a.foto || null,
-        rawStudent: updatedRawStudent,
-      })
-      .onConflictDoUpdate({
-        target: schema.alunos.id,
-        set: {
+    if (isDatabaseUrlConfigured) {
+      // CPF Duplicity check in PostgreSQL
+      if (cleanCpf && cleanCpf.length === 11) {
+        const existingWithCpf = await db.select().from(schema.alunos)
+          .where(and(
+            eq(schema.alunos.cpf, cleanCpf),
+            sql`${schema.alunos.id} != ${id}`
+          ));
+
+        if (existingWithCpf.length > 0) {
+          return res.status(409).json({
+            error: `CPF ${cleanCpf} já está cadastrado para outro aluno (${existingWithCpf[0].nome}).`,
+            code: 'DUPLICATE_CPF'
+          });
+        }
+      }
+
+      const result = await db.insert(schema.alunos)
+        .values({
+          id,
           userId: a.userId ? String(a.userId) : id,
           nome: a.nome || 'Aluno Arena',
           cpf: cleanCpf || a.cpf || null,
@@ -726,25 +715,46 @@ router.post('/students/save', requireAuth, async (req: AuthRequest, res: Respons
           professorResponsavel: a.professorResponsavel || null,
           fotoPerfil: a.fotoPerfil || a.foto || null,
           rawStudent: updatedRawStudent,
-          updatedAt: new Date(),
-        }
-      })
-      .returning();
+        })
+        .onConflictDoUpdate({
+          target: schema.alunos.id,
+          set: {
+            userId: a.userId ? String(a.userId) : id,
+            nome: a.nome || 'Aluno Arena',
+            cpf: cleanCpf || a.cpf || null,
+            rg: a.rg || null,
+            email: a.email || null,
+            telefone: a.telefone || null,
+            dataNascimento: a.dataNascimento || null,
+            faixa: a.faixa || null,
+            graus: typeof a.graus === 'number' ? a.graus : 0,
+            status: studentStatus,
+            academias: a.academias || a.academia || null,
+            professorResponsavel: a.professorResponsavel || null,
+            fotoPerfil: a.fotoPerfil || a.foto || null,
+            rawStudent: updatedRawStudent,
+            updatedAt: new Date(),
+          }
+        })
+        .returning();
 
-    // Audit Log with token-derived author
-    try {
-      await db.insert(schema.auditLogs).values({
-        id: `audit-aluno-${id}-${Date.now()}`,
-        userId: authenticatedUser?.uid || id,
-        acao: 'ALUNO_SALVO',
-        detalhe: `Aluno ${a.nome || id} salvo com status ${studentStatus} no Cloud SQL por ${authenticatedUser?.uid || id}`,
-        rawLog: { studentId: id, nome: a.nome, status: studentStatus, cpf: cleanCpf, savedBy: authenticatedUser?.uid },
-      });
-    } catch (auditErr) {
-      console.warn('Non-blocking audit log error:', auditErr);
+      // Audit Log with token-derived author
+      try {
+        await db.insert(schema.auditLogs).values({
+          id: `audit-aluno-${id}-${Date.now()}`,
+          userId: authenticatedUser?.uid || id,
+          acao: 'ALUNO_SALVO',
+          detalhe: `Aluno ${a.nome || id} salvo com status ${studentStatus} no Cloud SQL por ${authenticatedUser?.uid || id}`,
+          rawLog: { studentId: id, nome: a.nome, status: studentStatus, cpf: cleanCpf, savedBy: authenticatedUser?.uid },
+        });
+      } catch (auditErr) {
+        console.warn('Non-blocking audit log error:', auditErr);
+      }
+
+      return res.json({ success: true, student: result[0] });
     }
 
-    res.json({ success: true, student: result[0] });
+    res.json({ success: true, student: updatedRawStudent });
   } catch (err) {
     res.status(500).json({ error: 'Failed to save student', details: err instanceof Error ? err.message : String(err) });
   }
@@ -754,35 +764,37 @@ router.delete('/students/:id', requireAdmin, async (req: AuthRequest, res: Respo
   try {
     const { id } = req.params;
 
-    // Check linked registrations or monthly payments
-    const linkedInscricoes = await db.select().from(schema.campeonatoInscricoes)
-      .where(eq(schema.campeonatoInscricoes.atletaId, id))
-      .limit(1);
+    if (isDatabaseUrlConfigured) {
+      // Check linked registrations or monthly payments
+      const linkedInscricoes = await db.select().from(schema.campeonatoInscricoes)
+        .where(eq(schema.campeonatoInscricoes.atletaId, id))
+        .limit(1);
 
-    const linkedMensalidades = await db.select().from(schema.mensalidadesAlunos)
-      .where(eq(schema.mensalidadesAlunos.alunoId, id))
-      .limit(1);
+      const linkedMensalidades = await db.select().from(schema.mensalidadesAlunos)
+        .where(eq(schema.mensalidadesAlunos.alunoId, id))
+        .limit(1);
 
-    if (linkedInscricoes.length > 0 || linkedMensalidades.length > 0) {
-      return res.status(409).json({
-        error: 'Não é possível excluir o aluno pois existem inscrições ou movimentações financeiras vinculadas.',
-        code: 'LINKED_RECORDS_EXIST'
-      });
-    }
+      if (linkedInscricoes.length > 0 || linkedMensalidades.length > 0) {
+        return res.status(409).json({
+          error: 'Não é possível excluir o aluno pois existem inscrições ou movimentações financeiras vinculadas.',
+          code: 'LINKED_RECORDS_EXIST'
+        });
+      }
 
-    await db.delete(schema.alunos).where(eq(schema.alunos.id, id));
+      await db.delete(schema.alunos).where(eq(schema.alunos.id, id));
 
-    // Audit Log
-    try {
-      await db.insert(schema.auditLogs).values({
-        id: `audit-del-aluno-${id}-${Date.now()}`,
-        userId: id,
-        acao: 'ALUNO_EXCLUIDO',
-        detalhe: `Aluno ID ${id} excluído fisicamente do Cloud SQL`,
-        rawLog: { studentId: id },
-      });
-    } catch (auditErr) {
-      console.warn('Non-blocking audit log error:', auditErr);
+      // Audit Log
+      try {
+        await db.insert(schema.auditLogs).values({
+          id: `audit-del-aluno-${id}-${Date.now()}`,
+          userId: id,
+          acao: 'ALUNO_EXCLUIDO',
+          detalhe: `Aluno ID ${id} excluído fisicamente do Cloud SQL`,
+          rawLog: { studentId: id },
+        });
+      } catch (auditErr) {
+        console.warn('Non-blocking audit log error:', auditErr);
+      }
     }
 
     res.json({ success: true });
@@ -3154,27 +3166,29 @@ router.post('/noticias/save', requireAdmin, async (req: AuthRequest, res: Respon
     }
     const idStr = String(noticia.id);
     const fullObj = { ...noticia, id: noticia.id };
-    await db.insert(schema.noticias)
-      .values({
-        id: idStr,
-        titulo: fullObj.titulo || '',
-        resumo: fullObj.subtitulo || fullObj.resumo || '',
-        conteudo: fullObj.conteudo || '',
-        imagemUrl: fullObj.imagemUrl || fullObj.imagem || '',
-        data: fullObj.data || new Date().toLocaleString('pt-BR'),
-        rawNoticia: fullObj,
-      })
-      .onConflictDoUpdate({
-        target: schema.noticias.id,
-        set: {
+    if (isDatabaseUrlConfigured) {
+      await db.insert(schema.noticias)
+        .values({
+          id: idStr,
           titulo: fullObj.titulo || '',
           resumo: fullObj.subtitulo || fullObj.resumo || '',
           conteudo: fullObj.conteudo || '',
           imagemUrl: fullObj.imagemUrl || fullObj.imagem || '',
           data: fullObj.data || new Date().toLocaleString('pt-BR'),
           rawNoticia: fullObj,
-        }
-      });
+        })
+        .onConflictDoUpdate({
+          target: schema.noticias.id,
+          set: {
+            titulo: fullObj.titulo || '',
+            resumo: fullObj.subtitulo || fullObj.resumo || '',
+            conteudo: fullObj.conteudo || '',
+            imagemUrl: fullObj.imagemUrl || fullObj.imagem || '',
+            data: fullObj.data || new Date().toLocaleString('pt-BR'),
+            rawNoticia: fullObj,
+          }
+        });
+    }
     res.json({ success: true, noticia: fullObj });
   } catch (error) {
     res.status(500).json({ error: 'Failed to save noticia', details: error instanceof Error ? error.message : String(error) });
@@ -3184,7 +3198,9 @@ router.post('/noticias/save', requireAdmin, async (req: AuthRequest, res: Respon
 router.delete('/noticias/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    await db.delete(schema.noticias).where(eq(schema.noticias.id, String(id)));
+    if (isDatabaseUrlConfigured) {
+      await db.delete(schema.noticias).where(eq(schema.noticias.id, String(id)));
+    }
     res.json({ success: true, id });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete noticia', details: error instanceof Error ? error.message : String(error) });
@@ -3194,9 +3210,12 @@ router.delete('/noticias/:id', requireAdmin, async (req: AuthRequest, res: Respo
 // --- VÍDEOS ENDPOINTS ---
 router.get('/videos', async (req: Request, res: Response) => {
   try {
-    const records = await db.select().from(schema.videos);
-    const list = records.map(r => (r.rawVideo as any) || r);
-    res.json({ success: true, videos: list });
+    if (isDatabaseUrlConfigured) {
+      const records = await db.select().from(schema.videos);
+      const list = records.map(r => (r.rawVideo as any) || r);
+      return res.json({ success: true, videos: list });
+    }
+    res.json({ success: true, videos: [] });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch videos', details: error instanceof Error ? error.message : String(error) });
   }
@@ -3210,27 +3229,29 @@ router.post('/videos/save', requireAdmin, async (req: AuthRequest, res: Response
     }
     const idStr = String(video.id);
     const fullObj = { ...video, id: video.id };
-    await db.insert(schema.videos)
-      .values({
-        id: idStr,
-        titulo: fullObj.titulo || '',
-        descricao: fullObj.descricao || '',
-        videoUrl: fullObj.url || fullObj.videoUrl || '',
-        thumbUrl: fullObj.thumbUrl || fullObj.thumbnailUrl || '',
-        categoria: fullObj.categoria || '',
-        rawVideo: fullObj,
-      })
-      .onConflictDoUpdate({
-        target: schema.videos.id,
-        set: {
+    if (isDatabaseUrlConfigured) {
+      await db.insert(schema.videos)
+        .values({
+          id: idStr,
           titulo: fullObj.titulo || '',
           descricao: fullObj.descricao || '',
           videoUrl: fullObj.url || fullObj.videoUrl || '',
           thumbUrl: fullObj.thumbUrl || fullObj.thumbnailUrl || '',
           categoria: fullObj.categoria || '',
           rawVideo: fullObj,
-        }
-      });
+        })
+        .onConflictDoUpdate({
+          target: schema.videos.id,
+          set: {
+            titulo: fullObj.titulo || '',
+            descricao: fullObj.descricao || '',
+            videoUrl: fullObj.url || fullObj.videoUrl || '',
+            thumbUrl: fullObj.thumbUrl || fullObj.thumbnailUrl || '',
+            categoria: fullObj.categoria || '',
+            rawVideo: fullObj,
+          }
+        });
+    }
     res.json({ success: true, video: fullObj });
   } catch (error) {
     res.status(500).json({ error: 'Failed to save video', details: error instanceof Error ? error.message : String(error) });
@@ -3240,7 +3261,9 @@ router.post('/videos/save', requireAdmin, async (req: AuthRequest, res: Response
 router.delete('/videos/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    await db.delete(schema.videos).where(eq(schema.videos.id, String(id)));
+    if (isDatabaseUrlConfigured) {
+      await db.delete(schema.videos).where(eq(schema.videos.id, String(id)));
+    }
     res.json({ success: true, id });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete video', details: error instanceof Error ? error.message : String(error) });
@@ -3250,9 +3273,12 @@ router.delete('/videos/:id', requireAdmin, async (req: AuthRequest, res: Respons
 // --- LIVE STREAMS ENDPOINTS ---
 router.get('/live-streams', async (req: Request, res: Response) => {
   try {
-    const records = await db.select().from(schema.liveStreams);
-    const list = records.map(r => (r.rawLive as any) || r);
-    res.json({ success: true, liveStreams: list });
+    if (isDatabaseUrlConfigured) {
+      const records = await db.select().from(schema.liveStreams);
+      const list = records.map(r => (r.rawLive as any) || r);
+      return res.json({ success: true, liveStreams: list });
+    }
+    res.json({ success: true, liveStreams: [] });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch live streams', details: error instanceof Error ? error.message : String(error) });
   }
@@ -3266,25 +3292,27 @@ router.post('/live-streams/save', requireAdmin, async (req: AuthRequest, res: Re
     }
     const idStr = String(liveStream.id);
     const fullObj = { ...liveStream, id: liveStream.id };
-    await db.insert(schema.liveStreams)
-      .values({
-        id: idStr,
-        titulo: fullObj.titulo || '',
-        descricao: fullObj.descricao || '',
-        streamUrl: fullObj.embedUrl || fullObj.streamUrl || fullObj.url || '',
-        status: fullObj.status || 'agendado',
-        rawLive: fullObj,
-      })
-      .onConflictDoUpdate({
-        target: schema.liveStreams.id,
-        set: {
+    if (isDatabaseUrlConfigured) {
+      await db.insert(schema.liveStreams)
+        .values({
+          id: idStr,
           titulo: fullObj.titulo || '',
           descricao: fullObj.descricao || '',
           streamUrl: fullObj.embedUrl || fullObj.streamUrl || fullObj.url || '',
           status: fullObj.status || 'agendado',
           rawLive: fullObj,
-        }
-      });
+        })
+        .onConflictDoUpdate({
+          target: schema.liveStreams.id,
+          set: {
+            titulo: fullObj.titulo || '',
+            descricao: fullObj.descricao || '',
+            streamUrl: fullObj.embedUrl || fullObj.streamUrl || fullObj.url || '',
+            status: fullObj.status || 'agendado',
+            rawLive: fullObj,
+          }
+        });
+    }
     res.json({ success: true, liveStream: fullObj });
   } catch (error) {
     res.status(500).json({ error: 'Failed to save live stream', details: error instanceof Error ? error.message : String(error) });
@@ -3294,7 +3322,9 @@ router.post('/live-streams/save', requireAdmin, async (req: AuthRequest, res: Re
 router.delete('/live-streams/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    await db.delete(schema.liveStreams).where(eq(schema.liveStreams.id, String(id)));
+    if (isDatabaseUrlConfigured) {
+      await db.delete(schema.liveStreams).where(eq(schema.liveStreams.id, String(id)));
+    }
     res.json({ success: true, id });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete live stream', details: error instanceof Error ? error.message : String(error) });

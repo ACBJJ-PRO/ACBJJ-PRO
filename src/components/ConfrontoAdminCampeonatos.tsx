@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, Plus, Edit, Trash2, Check, Eye, EyeOff, PlusCircle, X, Upload, Image as ImageIcon } from 'lucide-react';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 interface Championship {
   id: string;
@@ -151,7 +152,10 @@ export default function ConfrontoAdminCampeonatos({
   const handleDelete = async (id: string, title: string) => {
     if (window.confirm(`Deseja realmente deletar o campeonato "${title}"? Esta ação é irreversível!`)) {
       try {
-        const res = await fetch(`/api/cloudsql/campeonatos/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        const res = await fetch(`/api/cloudsql/campeonatos/${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          headers: getAuthHeaders(),
+        });
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
           throw new Error(errData.error || 'Erro ao deletar campeonato');
@@ -184,7 +188,7 @@ export default function ConfrontoAdminCampeonatos({
       };
       const res = await fetch('/api/cloudsql/campeonatos/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ campeonato: payload })
       });
       if (!res.ok) {
@@ -255,7 +259,7 @@ export default function ConfrontoAdminCampeonatos({
       };
       const res = await fetch('/api/cloudsql/campeonatos/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ campeonato: payload })
       });
       if (!res.ok) {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { getAuthHeaders } from '../../utils/authHeaders';
 import {
   Student,
   ClassUnit,
@@ -118,9 +119,9 @@ export default function ProvasEAvaliacoesModule({
     async function loadCloudSQLData() {
       try {
         const [cyclesRes, evalsRes, settingsRes] = await Promise.all([
-          fetch('/api/cloudsql/evaluation-cycles').then((r) => r.ok ? r.json() : null),
-          fetch('/api/cloudsql/evaluations').then((r) => r.ok ? r.json() : null),
-          fetch('/api/cloudsql/evaluation-settings').then((r) => r.ok ? r.json() : null),
+          fetch('/api/cloudsql/evaluation-cycles', { headers: getAuthHeaders() }).then((r) => r.ok ? r.json() : null),
+          fetch('/api/cloudsql/evaluations', { headers: getAuthHeaders() }).then((r) => r.ok ? r.json() : null),
+          fetch('/api/cloudsql/evaluation-settings', { headers: getAuthHeaders() }).then((r) => r.ok ? r.json() : null),
         ]);
 
         if (mounted) {
@@ -194,7 +195,7 @@ export default function ProvasEAvaliacoesModule({
     // Save directly to Cloud SQL
     fetch('/api/cloudsql/evaluations/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(rec),
     }).catch((err) => console.error('Error saving evaluation in Cloud SQL:', err));
 
@@ -210,7 +211,7 @@ export default function ProvasEAvaliacoesModule({
 
     fetch('/api/cloudsql/evaluation-settings/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(newSettings),
     }).catch((err) => console.error('Error saving evaluation settings in Cloud SQL:', err));
   };
@@ -248,13 +249,13 @@ export default function ProvasEAvaliacoesModule({
     // Persist both cycles to Cloud SQL
     fetch('/api/cloudsql/evaluation-cycles/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(updatedArchivedCycle),
     }).catch((err) => console.error('Error archiving cycle in Cloud SQL:', err));
 
     fetch('/api/cloudsql/evaluation-cycles/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(newCycle),
     }).catch((err) => console.error('Error creating new cycle in Cloud SQL:', err));
 
@@ -277,7 +278,7 @@ export default function ProvasEAvaliacoesModule({
     if (targetCycle) {
       fetch('/api/cloudsql/evaluation-cycles/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(targetCycle),
       }).catch((err) => console.error('Error reopening cycle in Cloud SQL:', err));
     }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 import { updateFirestoreStateKey } from '../lib/firebase';
+import { getAuthHeaders } from '../utils/authHeaders';
 import { 
   Trophy, ArrowLeft, Shield, Check, CreditCard, Clock, AlertTriangle, 
   Search, Filter, RefreshCw, Layers, Copy, HelpCircle, Activity, 
@@ -442,7 +443,7 @@ export default function OConfrontoModule({
     try {
       const res = await fetch('/api/cloudsql/inscricoes/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           inscricao: {
             id: newReg.id,
@@ -537,7 +538,7 @@ export default function OConfrontoModule({
     try {
       const res = await fetch('/api/cloudsql/inscricoes/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           inscricao: {
             id: updatedReg.id,
@@ -598,7 +599,7 @@ export default function OConfrontoModule({
     try {
       const res = await fetch('/api/cloudsql/inscricoes/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           inscricao: {
             id: updatedReg.id,
@@ -690,7 +691,10 @@ export default function OConfrontoModule({
     });
 
     try {
-      const res = await fetch(`/api/cloudsql/inscricoes/${encodeURIComponent(regId)}`, { method: 'DELETE' });
+      const res = await fetch(`/api/cloudsql/inscricoes/${encodeURIComponent(regId)}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || 'Erro ao excluir inscrição');
@@ -746,7 +750,7 @@ export default function OConfrontoModule({
       };
       await fetch('/api/cloudsql/campeonatos/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ campeonato: payload })
       });
       const updated = confrontoCampeonatos.map(c => c.id === updatedChamp.id ? updatedChamp : c);

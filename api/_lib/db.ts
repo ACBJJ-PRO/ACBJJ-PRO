@@ -11,7 +11,22 @@ if (process.env.PGHOST === '127.0.0.1' || process.env.PGHOST === 'localhost' || 
 }
 
 const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
-export const isDatabaseUrlConfigured = Boolean(connectionString);
+
+function checkIsDbConfigured(): boolean {
+  if (!connectionString) return false;
+  try {
+    const parsed = new URL(connectionString);
+    const host = parsed.hostname;
+    if (host === '127.0.0.1' || host === 'localhost' || host === '::1' || !host) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const isDatabaseUrlConfigured = checkIsDbConfigured();
 
 function getCaCertificate(): string | undefined {
   const raw = process.env.DB_CA_CERT 

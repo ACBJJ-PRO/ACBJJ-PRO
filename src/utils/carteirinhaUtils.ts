@@ -1,5 +1,6 @@
 import { CarteirinhaConfig, UserCarteirinhaData, User, Student, CarteirinhaCredential, CarteirinhaAuthLog } from '../types';
 import { INITIAL_USERS, INITIAL_STUDENTS } from '../data';
+import { getAuthHeaders } from './authHeaders';
 
 export const DEFAULT_CARTEIRINHA_CONFIG: CarteirinhaConfig = {
   corPrincipal: '#0f0f0f',
@@ -92,7 +93,7 @@ export async function syncCarteirinhaDataFromCloudSQL(): Promise<void> {
   isCloudSqlSyncInProgress = true;
   try {
     // 1. Fetch config
-    const configRes = await fetch('/api/cloudsql/carteirinhas/config').catch(() => null);
+    const configRes = await fetch('/api/cloudsql/carteirinhas/config', { headers: getAuthHeaders() }).catch(() => null);
     if (configRes && configRes.ok) {
       const configJson = await configRes.json();
       if (configJson.success && configJson.config) {
@@ -101,7 +102,7 @@ export async function syncCarteirinhaDataFromCloudSQL(): Promise<void> {
     }
 
     // 2. Fetch credentials
-    const credsRes = await fetch('/api/cloudsql/carteirinhas/credentials').catch(() => null);
+    const credsRes = await fetch('/api/cloudsql/carteirinhas/credentials', { headers: getAuthHeaders() }).catch(() => null);
     if (credsRes && credsRes.ok) {
       const credsJson = await credsRes.json();
       if (credsJson.success && Array.isArray(credsJson.carteirinhas)) {
@@ -136,7 +137,7 @@ export async function syncCarteirinhaDataFromCloudSQL(): Promise<void> {
     }
 
     // 3. Fetch logs
-    const logsRes = await fetch('/api/cloudsql/carteirinhas/logs').catch(() => null);
+    const logsRes = await fetch('/api/cloudsql/carteirinhas/logs', { headers: getAuthHeaders() }).catch(() => null);
     if (logsRes && logsRes.ok) {
       const logsJson = await logsRes.json();
       if (logsJson.success && Array.isArray(logsJson.logs)) {
@@ -188,7 +189,7 @@ export function saveCarteirinhaConfig(config: CarteirinhaConfig): void {
     // Persist to Cloud SQL atomically
     fetch('/api/cloudsql/carteirinhas/config/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ config }),
     }).catch((err) => console.warn('Failed to save carteirinha config to Cloud SQL:', err));
   } catch (e) {
@@ -249,7 +250,7 @@ export function saveSingleCredentialCloudSQL(cred: CarteirinhaCredential): void 
   try {
     fetch('/api/cloudsql/carteirinhas/credentials/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ credential: cred }),
     }).catch((err) => console.warn('Failed to save single credential to Cloud SQL:', err));
   } catch (e) {
@@ -604,7 +605,7 @@ export function addCarteirinhaAuthLog(log: Omit<CarteirinhaAuthLog, 'id'>): void
     // Save to Cloud SQL
     fetch('/api/cloudsql/carteirinhas/logs/add', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ log: newEntry }),
     }).catch((err) => console.warn('Failed to save log to Cloud SQL:', err));
   } catch (e) {
@@ -628,7 +629,7 @@ export async function verifyCarteirinhaRemoteCloudSQL(code: string): Promise<any
   try {
     const res = await fetch('/api/cloudsql/credentials/verify', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ code }),
     });
     if (res.ok) {
@@ -1181,7 +1182,7 @@ export function updateUserCarteirinhaStatus(
   const [eType, eId] = key.includes('-') ? key.split('-') : ['user', key];
   fetch('/api/cloudsql/carteirinhas/status/update', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify({ id: key, entityType: eType, entityId: eId, status: newStatus, motivo }),
   }).catch((err) => console.warn('Failed to update status in Cloud SQL:', err));
 
@@ -1217,7 +1218,7 @@ export function renewUserCarteirinhaValidade(
   const [eType, eId] = key.includes('-') ? key.split('-') : ['user', key];
   fetch('/api/cloudsql/carteirinhas/status/update', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify({ id: key, entityType: eType, entityId: eId, validade: novaValidade, status: 'ativo', motivo }),
   }).catch((err) => console.warn('Failed to renew validade in Cloud SQL:', err));
 
@@ -1253,7 +1254,7 @@ export function issueNewViaUserCarteirinha(
   const [eType, eId] = key.includes('-') ? key.split('-') : ['user', key];
   fetch('/api/cloudsql/carteirinhas/status/update', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify({ id: key, entityType: eType, entityId: eId, status: 'ativo', motivo: `Emissão de ${newVias}ª via` }),
   }).catch((err) => console.warn('Failed to save 2nd via to Cloud SQL:', err));
 
