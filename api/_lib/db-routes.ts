@@ -1764,6 +1764,16 @@ router.post('/carteirinhas/logs/add', async (req: Request, res: Response) => {
   }
 });
 
+function simpleHash(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
 // POST & GET /api/cloudsql/credentials/verify and /api/cloudsql/carteirinhas/verify
 const handleVerification = async (req: Request, res: Response) => {
   try {
@@ -1812,47 +1822,57 @@ const handleVerification = async (req: Request, res: Response) => {
       if (matchHash) extractedHash = matchHash[1];
     }
 
-    // Robust query matching with cleanTarget, strippedTarget, and extractedHash
-    const whereConditions = [
-      eq(schema.carteirinhas.credentialId, targetCode),
-      eq(schema.carteirinhas.credentialId, cleanTarget),
-      eq(schema.carteirinhas.authCode, targetCode),
-      eq(schema.carteirinhas.authCode, cleanTarget),
-      eq(schema.carteirinhas.qrToken, rawCode),
-      eq(schema.carteirinhas.registro, targetCode),
-      eq(schema.carteirinhas.registro, cleanTarget),
-      like(schema.carteirinhas.credentialId, `%${strippedTarget}%`),
-      like(schema.carteirinhas.authCode, `%${strippedTarget}%`),
-    ];
+    // Step 1: Exact Direct Match in carteirinhas table
+    let matchedList = await db.select().from(schema.carteirinhas).where(
+      or(
+        eq(schema.carteirinhas.credentialId, targetCode),
+        eq(schema.carteirinhas.credentialId, cleanTarget),
+        eq(schema.carteirinhas.authCode, targetCode),
+        eq(schema.carteirinhas.authCode, cleanTarget),
+        eq(schema.carteirinhas.qrToken, rawCode),
+        eq(schema.carteirinhas.registro, targetCode),
+        eq(schema.carteirinhas.registro, cleanTarget)
+      )
+    );
 
-    if (extractedHash && extractedHash.length === 4) {
-      whereConditions.push(like(schema.carteirinhas.credentialId, `%${extractedHash}%`));
-      whereConditions.push(like(schema.carteirinhas.authCode, `%${extractedHash}%`));
-    }
-
-    let matchedList = await db.select().from(schema.carteirinhas)
-      .where(or(...whereConditions))
-      .limit(1);
-
-    // Fallback: If not found in carteirinhas table, look up by entity digits in users/alunos
+    // Step 2: Deconstructed Structural Fallback (Recovery for unindexed / historical records)
     if (matchedList.length === 0) {
       const entityDigits = cleanTarget.replace(/\D/g, '');
-      if (entityDigits) {
-        const numId = parseInt(entityDigits, 10);
-        
-        // Search in users
-        const userMatches = await db.select().from(schema.users).where(
-          or(eq(schema.users.id, numId), eq(schema.users.uid, entityDigits))
-        ).limit(1);
+      const numId = entityDigits ? parseInt(entityDigits, 10) : NaN;
 
-        if (userMatches.length > 0) {
-          const u = userMatches[0];
+      const candidatesMap = new Map<string, any>();
+
+      // Check carteirinhas by hash or entity ID
+      if (extractedHash && extractedHash.length === 4) {
+        const hashMatches = await db.select().from(schema.carteirinhas).where(
+          or(
+            like(schema.carteirinhas.credentialId, `%${extractedHash}%`),
+            like(schema.carteirinhas.authCode, `%${extractedHash}%`)
+          )
+        );
+        hashMatches.forEach((c) => candidatesMap.set(c.id, c));
+      }
+
+      // Check users & alunos by ID / digits
+      if (!isNaN(numId)) {
+        const userMatches = await db.select().from(schema.users).where(
+          or(
+            eq(schema.users.id, numId),
+            eq(schema.users.uid, String(numId)),
+            eq(schema.users.uid, entityDigits)
+          )
+        );
+
+        const host = req.headers.host || 'arenadocompetidor.com';
+        const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
+
+        for (const u of userMatches) {
           const id = `user-${u.id || u.uid}`;
-          const hash1 = extractedHash || 'V0C8';
-          const credId = `CARD-${entityDigits.padStart(4, '0').slice(-4)}-${hash1}`;
-          const authC = `ACBJJ-${hash1}-AAWX`;
-          const host = req.headers.host || 'arenadocompetidor.com';
-          const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
+          const cleanId = String(u.id || u.uid).replace(/\D/g, '');
+          const hash1 = simpleHash(`seed1-${id}`).toString(36).toUpperCase().padStart(4, '7').substring(0, 4);
+          const hash2 = simpleHash(`seed2-${id}`).toString(36).toUpperCase().padStart(4, '9').substring(0, 4);
+          const credId = `CARD-${cleanId.padStart(4, '0').slice(-4)}-${hash1}`;
+          const authC = `ACBJJ-${hash1}-${hash2}`;
           const qrToken = `${proto}://${host}/verify/card/${credId}`;
 
           const autoRecord = {
@@ -1874,45 +1894,58 @@ const handleVerification = async (req: Request, res: Response) => {
           };
 
           await db.insert(schema.carteirinhas).values(autoRecord).onConflictDoNothing().catch(() => {});
-          matchedList = [autoRecord as any];
-        } else {
-          // Search in alunos
-          const studentMatches = await db.select().from(schema.alunos).where(
-            eq(schema.alunos.id, entityDigits)
-          ).limit(1);
-
-          if (studentMatches.length > 0) {
-            const a = studentMatches[0];
-            const id = `student-${a.id}`;
-            const hash1 = extractedHash || 'V0C8';
-            const credId = `CARD-${entityDigits.padStart(4, '0').slice(-4)}-${hash1}`;
-            const authC = `ACBJJ-${hash1}-AAWX`;
-            const host = req.headers.host || 'arenadocompetidor.com';
-            const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
-            const qrToken = `${proto}://${host}/verify/card/${credId}`;
-
-            const autoRecord = {
-              id,
-              credentialId: credId,
-              authCode: authC,
-              entityType: 'student',
-              entityId: String(a.id),
-              userId: String(a.id),
-              userNome: a.nome || 'Atleta Arena',
-              userTipo: 'aluno',
-              fotoPerfil: a.fotoPerfil || '',
-              status: 'ativo',
-              validade: 'DEZ/2027',
-              registro: `ACBJJ2026${String(a.id).padStart(3, '0')}`,
-              qrToken,
-              rawCarteirinha: null,
-              updatedAt: new Date(),
-            };
-
-            await db.insert(schema.carteirinhas).values(autoRecord).onConflictDoNothing().catch(() => {});
-            matchedList = [autoRecord as any];
-          }
+          candidatesMap.set(id, autoRecord);
         }
+
+        const studentMatches = await db.select().from(schema.alunos).where(
+          or(
+            eq(schema.alunos.id, String(numId)),
+            eq(schema.alunos.id, entityDigits)
+          )
+        );
+
+        for (const a of studentMatches) {
+          const id = `student-${a.id}`;
+          const cleanId = String(a.id).replace(/\D/g, '');
+          const hash1 = simpleHash(`seed1-${id}`).toString(36).toUpperCase().padStart(4, '7').substring(0, 4);
+          const hash2 = simpleHash(`seed2-${id}`).toString(36).toUpperCase().padStart(4, '9').substring(0, 4);
+          const credId = `CARD-${cleanId.padStart(4, '0').slice(-4)}-${hash1}`;
+          const authC = `ACBJJ-${hash1}-${hash2}`;
+          const qrToken = `${proto}://${host}/verify/card/${credId}`;
+
+          const autoRecord = {
+            id,
+            credentialId: credId,
+            authCode: authC,
+            entityType: 'student',
+            entityId: String(a.id),
+            userId: String(a.id),
+            userNome: a.nome || 'Atleta Arena',
+            userTipo: 'aluno',
+            fotoPerfil: a.fotoPerfil || '',
+            status: 'ativo',
+            validade: 'DEZ/2027',
+            registro: `ACBJJ2026${String(a.id).padStart(3, '0')}`,
+            qrToken,
+            rawCarteirinha: null,
+            updatedAt: new Date(),
+          };
+
+          await db.insert(schema.carteirinhas).values(autoRecord).onConflictDoNothing().catch(() => {});
+          candidatesMap.set(id, autoRecord);
+        }
+      }
+
+      const candidateList = Array.from(candidatesMap.values());
+
+      if (candidateList.length === 1) {
+        matchedList = candidateList;
+      } else if (candidateList.length > 1) {
+        return res.status(400).json({
+          success: false,
+          reason: 'AMBIGUOUS',
+          message: '✕ CREDENCIAL AMBÍGUA: Múltiplas credenciais encontradas para a chave digitada.',
+        });
       }
     }
 

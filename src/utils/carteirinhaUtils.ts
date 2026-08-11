@@ -778,10 +778,12 @@ export function verifyCredentialQuery(
     });
   }
 
-  // Search Strategy 6: Hash Part Cross-Match (e.g. V0C8 present in both CARD-0004-V0C8 and ACBJJ-V0C8-AAWX)
+  // Search Strategy 6: Deconstructed Structural Fallback & Hash Cross-Match (e.g. CARD-0037-X51P <-> ACBJJ-X51P-Z9WE)
   if (!matched) {
     const parts = cleanQuery.split(/[-_]/).filter(Boolean);
+    const entityDigits = cleanQuery.replace(/\D/g, '');
     let extractedHash = '';
+
     if (cleanQuery.startsWith('CARD') && parts.length >= 3) {
       extractedHash = parts[parts.length - 1];
     } else if (cleanQuery.startsWith('ACBJJ') && parts.length >= 3) {
@@ -791,33 +793,73 @@ export function verifyCredentialQuery(
       if (matchHash) extractedHash = matchHash[1];
     }
 
-    if (extractedHash && extractedHash.length === 4) {
-      matched = credentialsList.find((c) => {
-        const cId = (c.credentialId || '').toUpperCase();
-        const cAuth = (c.authCode || '').toUpperCase();
-        return cId.includes(extractedHash) || cAuth.includes(extractedHash);
-      });
-    }
-  }
+    const candidateMatches: CarteirinhaCredential[] = [];
 
-  // Search Strategy 7: Entity Numeric ID Resolution Fallback (e.g. CARD-0004-V0C8 -> entityId 4)
-  if (!matched) {
-    const entityDigits = cleanQuery.replace(/\D/g, '');
-    if (entityDigits) {
-      const numId = parseInt(entityDigits, 10);
-      const foundUser = allUsuarios.find(
-        (u) => u.id === numId || String(u.id) === entityDigits || String(u.id) === String(numId)
-      );
-      if (foundUser) {
-        matched = getOrCreateUserCredential('user', foundUser.id, foundUser, null);
-      } else {
-        const foundStudent = allAlunos.find(
-          (a) => a.id === numId || String(a.id) === entityDigits || String(a.id) === String(numId)
-        );
-        if (foundStudent) {
-          matched = getOrCreateUserCredential('student', foundStudent.id, null, foundStudent);
+    // Search across existing indexed credentials
+    credentialsList.forEach((c) => {
+      const cId = (c.credentialId || '').toUpperCase();
+      const cAuth = (c.authCode || '').toUpperCase();
+      const cEntityDigits = String(c.entityId || '').replace(/\D/g, '');
+
+      if (
+        (extractedHash && (cId.includes(extractedHash) || cAuth.includes(extractedHash))) ||
+        (entityDigits && cEntityDigits && entityDigits === cEntityDigits)
+      ) {
+        if (!candidateMatches.some((cm) => cm.id === c.id)) {
+          candidateMatches.push(c);
         }
       }
+    });
+
+    // Also search across allUsuarios and allAlunos by computing deterministic credential
+    if (entityDigits) {
+      const numId = parseInt(entityDigits, 10);
+      allUsuarios.forEach((u) => {
+        if (u.id === numId || String(u.id) === entityDigits) {
+          const cred = getOrCreateUserCredential('user', u.id, u, null);
+          if (cred && !candidateMatches.some((cm) => cm.id === cred.id)) {
+            candidateMatches.push(cred);
+          }
+        }
+      });
+      allAlunos.forEach((a) => {
+        if (a.id === numId || String(a.id) === entityDigits || String(a.id) === String(numId)) {
+          const cred = getOrCreateUserCredential('student', a.id, null, a);
+          if (cred && !candidateMatches.some((cm) => cm.id === cred.id)) {
+            candidateMatches.push(cred);
+          }
+        }
+      });
+    }
+
+    // Safety Ambiguity Check: Ensure distinct candidate resolution
+    if (candidateMatches.length === 1) {
+      matched = candidateMatches[0];
+      // Self-heal / align credential ID format if needed
+      if (matched && entityDigits) {
+        const entityType = matched.entityType || (matched.id.startsWith('student-') ? 'student' : 'user');
+        const entityId = matched.entityId || matched.userId;
+        getOrCreateUserCredential(entityType as any, entityId);
+      }
+    } else if (candidateMatches.length > 1) {
+      // More than one distinct match -> return ambiguity error for security
+      const diagnostic: CredentialAuditDiagnostic = {
+        rawInput: rawQuery,
+        normalizedQuery: cleanQuery,
+        strippedQuery: strippedQuery,
+        detectedType: 'AMBIGUOS',
+        searchedCount: candidateMatches.length,
+        credentialFound: false,
+        titularFound: false,
+        failedStep: 'AMBIGUIDADE_DETECTADA',
+      };
+      return {
+        success: false,
+        reason: 'NOT_FOUND',
+        message: '✕ CREDENCIAL AMBÍGUA: Múltiplas credenciais encontradas para a chave digitada.',
+        scannedPayload: rawQuery,
+        diagnostic,
+      };
     }
   }
 
