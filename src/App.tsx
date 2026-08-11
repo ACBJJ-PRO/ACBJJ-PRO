@@ -2730,6 +2730,7 @@ export default function App() {
               isCpfProvisorio: cleanedFields.isCpfProvisorio !== undefined ? cleanedFields.isCpfProvisorio : u.isCpfProvisorio,
               cpfProvisorioSubstituidoEm: cleanedFields.cpfProvisorioSubstituidoEm !== undefined ? cleanedFields.cpfProvisorioSubstituidoEm : u.cpfProvisorioSubstituidoEm,
               cpfProvisorioSubstituidoPor: cleanedFields.cpfProvisorioSubstituidoPor !== undefined ? cleanedFields.cpfProvisorioSubstituidoPor : u.cpfProvisorioSubstituidoPor,
+              cpfProvisorioAnterior: cleanedFields.cpfProvisorioAnterior !== undefined ? cleanedFields.cpfProvisorioAnterior : u.cpfProvisorioAnterior,
               dataNascimento: cleanedFields.dataNascimento !== undefined ? cleanedFields.dataNascimento : u.dataNascimento,
               whatsapp: cleanedFields.whatsapp !== undefined ? cleanedFields.whatsapp : u.whatsapp,
               faixa: cleanedFields.faixa !== undefined ? cleanedFields.faixa : u.faixa,

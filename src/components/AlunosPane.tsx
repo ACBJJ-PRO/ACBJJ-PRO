@@ -1330,11 +1330,13 @@ export default function AlunosPane({
                   let updatedIsProvisorio = studentToEdit.isCpfProvisorio;
                   let updatedSubstitutedEm = studentToEdit.cpfProvisorioSubstituidoEm;
                   let updatedSubstitutedPor = studentToEdit.cpfProvisorioSubstituidoPor;
+                  let updatedAnterior = studentToEdit.cpfProvisorioAnterior || studentToEdit.cpf;
 
-                  if (currentIsProvisorio && newCpfTrim && !newCpfTrim.toUpperCase().startsWith('INF-') && cleanedNewCpf.length === 11) {
+                  if (currentIsProvisorio && newCpfTrim && !newCpfTrim.toUpperCase().startsWith('INF-') && !newCpfTrim.toUpperCase().startsWith('IIP-') && cleanedNewCpf.length === 11) {
                     updatedIsProvisorio = false;
                     updatedSubstitutedEm = new Date().toISOString();
                     updatedSubstitutedPor = 'Mestre/Admin';
+                    updatedAnterior = studentToEdit.cpf;
 
                     if (onAddAuditLog) {
                       onAddAuditLog(
@@ -1355,6 +1357,7 @@ export default function AlunosPane({
                       isCpfProvisorio: updatedIsProvisorio,
                       cpfProvisorioSubstituidoEm: updatedSubstitutedEm,
                       cpfProvisorioSubstituidoPor: updatedSubstitutedPor,
+                      cpfProvisorioAnterior: updatedAnterior,
                       faixa: editFaixa,
                       tipo: editStudentTipo,
                       whatsapp: editWhatsapp.trim(),
@@ -1657,11 +1660,36 @@ export default function AlunosPane({
 
                   const finalUpperNome = editUserNome.trim().toUpperCase();
 
+                  const currentUserIsProvisorio = Boolean(userToEdit.cpf?.startsWith('INF-') || userToEdit.cpf?.startsWith('IIP-') || userToEdit.isCpfProvisorio);
+                  let updatedUserIsProvisorio = userToEdit.isCpfProvisorio;
+                  let updatedUserSubstitutedEm = userToEdit.cpfProvisorioSubstituidoEm;
+                  let updatedUserSubstitutedPor = userToEdit.cpfProvisorioSubstituidoPor;
+                  let updatedUserAnterior = userToEdit.cpfProvisorioAnterior || userToEdit.cpf;
+
+                  const editUserCpfTrim = editUserCpf.trim();
+                  if (currentUserIsProvisorio && editUserCpfTrim && !editUserCpfTrim.toUpperCase().startsWith('INF-') && !editUserCpfTrim.toUpperCase().startsWith('IIP-') && cleanedNewCpf.length === 11) {
+                    updatedUserIsProvisorio = false;
+                    updatedUserSubstitutedEm = new Date().toISOString();
+                    updatedUserSubstitutedPor = 'Mestre/Admin';
+                    updatedUserAnterior = userToEdit.cpf;
+                    if (onAddAuditLog) {
+                      onAddAuditLog(
+                        'ATUALIZACAO',
+                        'Substituição CPF Provisório',
+                        `Substituição do CPF Provisório (${userToEdit.cpf}) pelo CPF Oficial (${editUserCpf}) do usuário ${userToEdit.nome}`
+                      );
+                    }
+                  }
+
                   if (onUpdateUsuario) {
                     onUpdateUsuario(userToEdit.id, {
                       nome: finalUpperNome,
                       email: editUserEmail.trim().toLowerCase(),
                       cpf: editUserCpf.trim(),
+                      isCpfProvisorio: updatedUserIsProvisorio,
+                      cpfProvisorioSubstituidoEm: updatedUserSubstitutedEm,
+                      cpfProvisorioSubstituidoPor: updatedUserSubstitutedPor,
+                      cpfProvisorioAnterior: updatedUserAnterior,
                       dataNascimento: editUserDataNascimento,
                       whatsapp: editUserWhatsapp.trim(),
                       faixa: editUserFaixa,
@@ -1674,6 +1702,10 @@ export default function AlunosPane({
                       nome: finalUpperNome,
                       email: editUserEmail.trim().toLowerCase(),
                       cpf: editUserCpf.trim(),
+                      isCpfProvisorio: updatedUserIsProvisorio,
+                      cpfProvisorioSubstituidoEm: updatedUserSubstitutedEm,
+                      cpfProvisorioSubstituidoPor: updatedUserSubstitutedPor,
+                      cpfProvisorioAnterior: updatedUserAnterior,
                       dataNascimento: editUserDataNascimento,
                       whatsapp: editUserWhatsapp.trim(),
                       faixa: editUserFaixa,

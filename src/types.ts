@@ -55,6 +55,7 @@ export interface User {
   cpfProvisorioDataCriacao?: string;
   cpfProvisorioSubstituidoEm?: string;
   cpfProvisorioSubstituidoPor?: string;
+  cpfProvisorioAnterior?: string;
   faixa?: string;
   graduacao?: string;
   turma?: string;
@@ -118,6 +119,7 @@ export interface Student {
   cpfProvisorioDataCriacao?: string;
   cpfProvisorioSubstituidoEm?: string;
   cpfProvisorioSubstituidoPor?: string;
+  cpfProvisorioAnterior?: string;
   historicoProvas?: any[];
   historicoGraduacoes?: any[];
   dataAprovacao?: string;

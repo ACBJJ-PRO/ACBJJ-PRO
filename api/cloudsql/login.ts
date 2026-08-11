@@ -57,13 +57,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Normalize input CPF
-    let cleanInputCpf = inputCpf;
-    if (inputCpf.toUpperCase().startsWith('INF-')) {
-      cleanInputCpf = inputCpf.toUpperCase().trim();
-    } else {
-      cleanInputCpf = inputCpf.replace(/\D/g, '');
-    }
+    // Normalize input
+    const cleanInputDigits = inputCpf.replace(/\D/g, '');
+    const rawInputUpper = inputCpf.toUpperCase().trim();
+    const isInputEmail = inputCpf.includes('@');
 
     // Query DB users with fallback to initial data if DB unavailable or empty
     let dbUsers: any[] = [];
@@ -102,77 +99,109 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let matchedUserRow: any = null;
     let matchedRawUser: any = null;
+    let substitutedMatchFound = false;
 
+    // 1. Search in dbUsers
     for (const uRow of dbUsers) {
       let rawUser: any = uRow.rawUser;
       if (typeof rawUser === 'string') {
-        try {
-          rawUser = JSON.parse(rawUser);
-        } catch {
-          rawUser = {};
-        }
+        try { rawUser = JSON.parse(rawUser); } catch { rawUser = {}; }
       }
       if (!rawUser || typeof rawUser !== 'object') {
         rawUser = uRow;
       }
 
       const userCpf = String(rawUser.cpf || uRow.cpf || uRow.uid || '').trim();
-      let cleanUserCpf = userCpf;
-      if (userCpf.toUpperCase().startsWith('INF-')) {
-        cleanUserCpf = userCpf.toUpperCase().trim();
-      } else {
-        cleanUserCpf = userCpf.replace(/\D/g, '');
+      const cleanUserDigits = userCpf.replace(/\D/g, '');
+      const rawUserUpper = userCpf.toUpperCase().trim();
+
+      const isProvisorio = Boolean(
+        rawUser.isCpfProvisorio ||
+        uRow.isCpfProvisorio ||
+        rawUserUpper.startsWith('INF-') ||
+        rawUserUpper.startsWith('IIP-')
+      );
+
+      const substituidoEm = rawUser.cpfProvisorioSubstituidoEm || uRow.cpfProvisorioSubstituidoEm;
+      const anteriorIip = String(rawUser.cpfProvisorioAnterior || rawUser.oldCpfProvisorio || uRow.cpfProvisorioAnterior || '').trim();
+      const cleanAnteriorDigits = anteriorIip.replace(/\D/g, '');
+      const rawAnteriorUpper = anteriorIip.toUpperCase().trim();
+
+      // Check if input matches a substituted IIP
+      const matchesSubstitutedAnterior =
+        (cleanInputDigits && cleanAnteriorDigits && cleanInputDigits === cleanAnteriorDigits) ||
+        (rawInputUpper && rawAnteriorUpper && rawInputUpper === rawAnteriorUpper);
+
+      if (matchesSubstitutedAnterior) {
+        substitutedMatchFound = true;
+        continue;
       }
 
-      // Check match by CPF
-      if (cleanUserCpf && cleanUserCpf === cleanInputCpf) {
-        matchedUserRow = uRow;
-        matchedRawUser = rawUser;
-        break;
-      }
+      // Check match by current identifier / email / admin fallback
+      const isCpfDigitMatch = cleanInputDigits && cleanUserDigits && cleanInputDigits === cleanUserDigits;
+      const isRawStringMatch = rawInputUpper && rawUserUpper && rawInputUpper === rawUserUpper;
+      const isAdminFallback =
+        (cleanInputDigits === '12345678912' || cleanInputDigits === '12345678900' || cleanInputDigits === '12345678911') &&
+        (uRow.tipo === 'admin' || rawUser.tipo === 'admin' || uRow.uid === 'admin' || rawUser.email === 'admin@admin.com');
+      const isEmailMatch = isInputEmail && String(rawUser.email || uRow.email || '').toLowerCase() === inputCpf.toLowerCase();
 
-      // Admin CPF fallback (12345678912, 12345678900, 12345678911)
-      if (
-        (cleanInputCpf === '12345678912' || cleanInputCpf === '12345678900' || cleanInputCpf === '12345678911') &&
-        (uRow.tipo === 'admin' || rawUser.tipo === 'admin' || uRow.uid === 'admin' || rawUser.email === 'admin@admin.com')
-      ) {
-        matchedUserRow = uRow;
-        matchedRawUser = rawUser;
-        break;
-      }
+      if (isCpfDigitMatch || isRawStringMatch || isAdminFallback || isEmailMatch) {
+        if (isProvisorio && substituidoEm) {
+          substitutedMatchFound = true;
+          continue;
+        }
 
-      // Email fallback if input looks like an email
-      if (inputCpf.includes('@') && String(rawUser.email || uRow.email).toLowerCase() === inputCpf.toLowerCase()) {
         matchedUserRow = uRow;
         matchedRawUser = rawUser;
         break;
       }
     }
 
-    // Student fallback if not in users
+    // 2. Search in dbStudents if not found in dbUsers
     if (!matchedUserRow) {
       for (const sRow of dbStudents) {
         let rawStudent: any = sRow.rawStudent;
         if (typeof rawStudent === 'string') {
-          try {
-            rawStudent = JSON.parse(rawStudent);
-          } catch {
-            rawStudent = {};
-          }
+          try { rawStudent = JSON.parse(rawStudent); } catch { rawStudent = {}; }
         }
         if (!rawStudent || typeof rawStudent !== 'object') {
           rawStudent = sRow;
         }
 
         const studentCpf = String(rawStudent.cpf || sRow.cpf || '').trim();
-        let cleanStudentCpf = studentCpf;
-        if (studentCpf.toUpperCase().startsWith('INF-')) {
-          cleanStudentCpf = studentCpf.toUpperCase().trim();
-        } else {
-          cleanStudentCpf = studentCpf.replace(/\D/g, '');
+        const cleanStudentDigits = studentCpf.replace(/\D/g, '');
+        const rawStudentUpper = studentCpf.toUpperCase().trim();
+
+        const isProvisorio = Boolean(
+          rawStudent.isCpfProvisorio ||
+          sRow.isCpfProvisorio ||
+          rawStudentUpper.startsWith('INF-') ||
+          rawStudentUpper.startsWith('IIP-')
+        );
+
+        const substituidoEm = rawStudent.cpfProvisorioSubstituidoEm || sRow.cpfProvisorioSubstituidoEm;
+        const anteriorIip = String(rawStudent.cpfProvisorioAnterior || rawStudent.oldCpfProvisorio || sRow.cpfProvisorioAnterior || '').trim();
+        const cleanAnteriorDigits = anteriorIip.replace(/\D/g, '');
+        const rawAnteriorUpper = anteriorIip.toUpperCase().trim();
+
+        const matchesSubstitutedAnterior =
+          (cleanInputDigits && cleanAnteriorDigits && cleanInputDigits === cleanAnteriorDigits) ||
+          (rawInputUpper && rawAnteriorUpper && rawInputUpper === rawAnteriorUpper);
+
+        if (matchesSubstitutedAnterior) {
+          substitutedMatchFound = true;
+          continue;
         }
 
-        if (cleanStudentCpf && cleanStudentCpf === cleanInputCpf) {
+        const isCpfDigitMatch = cleanInputDigits && cleanStudentDigits && cleanInputDigits === cleanStudentDigits;
+        const isRawStringMatch = rawInputUpper && rawStudentUpper && rawInputUpper === rawStudentUpper;
+
+        if (isCpfDigitMatch || isRawStringMatch) {
+          if (isProvisorio && substituidoEm) {
+            substitutedMatchFound = true;
+            continue;
+          }
+
           matchedUserRow = {
             id: sRow.id,
             uid: sRow.userId || sRow.id,
@@ -197,11 +226,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (!matchedUserRow) {
+      if (substitutedMatchFound) {
+        return res.status(401).json({
+          ok: false,
+          success: false,
+          code: 'IIP_SUBSTITUTED',
+          message: 'Este IIP provisório foi substituído por um CPF válido. Por favor, utilize o seu CPF oficial para realizar o login.',
+          error: 'Este IIP provisório foi substituído por um CPF válido. Por favor, utilize o seu CPF oficial para realizar o login.',
+        });
+      }
+
       return res.status(401).json({
         ok: false,
         success: false,
         code: 'INVALID_CREDENTIALS',
         message: 'CPF ou senha inválidos.',
+        error: 'CPF ou senha inválidos.',
       });
     }
 
