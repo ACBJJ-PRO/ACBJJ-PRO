@@ -171,10 +171,14 @@ export const PublicCardVerificationModal: React.FC<PublicCardVerificationModalPr
               </div>
 
               {/* Barcode SVG display */}
-              <div className="bg-white rounded-xl p-3 flex flex-col items-center justify-center space-y-1 text-black">
-                <p className="text-[9px] font-bold tracking-widest text-neutral-500 uppercase">Código de Barras Oficial</p>
-                <BarcodeSvg value={credential.credentialId} height={36} width={280} />
-                <p className="text-[10px] font-mono font-bold text-neutral-800">{credential.credentialId}</p>
+              <div className="w-full">
+                <BarcodeSvg
+                  value={credential.credentialId}
+                  height={42}
+                  width={1.6}
+                  displayValue={true}
+                  margin={12}
+                />
               </div>
 
             </div>

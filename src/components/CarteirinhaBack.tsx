@@ -236,14 +236,16 @@ export default function CarteirinhaBack({
           </div>
 
           {/* Barcode representing Credencial ID */}
-          <div className="pt-1 border-t border-neutral-800/60">
+          <div className="pt-1.5 border-t border-neutral-800/80">
             <BarcodeSvg
               value={credential.credentialId}
-              height={22}
-              width={1.2}
+              height={32}
+              width={1.4}
               displayValue={true}
-              lineColor="#f97316"
-              textColor="#d1d5db"
+              background="#ffffff"
+              lineColor="#000000"
+              textColor="#000000"
+              margin={10}
             />
           </div>
         </div>

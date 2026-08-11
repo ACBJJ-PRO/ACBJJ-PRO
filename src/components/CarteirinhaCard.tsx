@@ -136,9 +136,9 @@ export default function CarteirinhaCard({
       JsBarcode(canvas, credential.credentialId, {
         format: 'CODE128',
         width: 2,
-        height: 38,
+        height: 42,
         displayValue: false,
-        margin: 2,
+        margin: 12,
         background: '#ffffff',
         lineColor: '#000000',
       });
@@ -583,12 +583,14 @@ export default function CarteirinhaCard({
                     </div>
                   </div>
 
-                  <div style="font-size: 7px; color: #aaa; font-family: 'JetBrains Mono', monospace;">
-                    CREDENCIAL ID: ${credential.credentialId}
-                  </div>
-                  ${barcodeDataUrl ? `<div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.15); text-align: center;">
-                    <img src="${barcodeDataUrl}" style="height: 24px; max-width: 100%; display: block; margin: 0 auto; filter: invert(1) brightness(2);" />
-                  </div>` : ''}
+                  ${barcodeDataUrl ? `
+                    <div style="margin-top: 6px; padding: 4px; background-color: #ffffff; border-radius: 6px; text-align: center; border: 1px solid #d4d4d4; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                      <img src="${barcodeDataUrl}" style="height: 32px; max-width: 100%; display: block; margin: 0 auto; image-rendering: pixelated;" />
+                      <div style="font-size: 7.5px; font-weight: 800; color: #000000; font-family: 'JetBrains Mono', monospace; margin-top: 2px; text-align: center; letter-spacing: 0.5px;">
+                        ID CREDENCIAL: ${credential.credentialId}
+                      </div>
+                    </div>
+                  ` : ''}
                 </div>
               </div>
 
