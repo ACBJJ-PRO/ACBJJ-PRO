@@ -1,9 +1,11 @@
 import React from 'react';
 import QRCode from 'qrcode';
+import JsBarcode from 'jsbarcode';
 import { User, Student, CarteirinhaConfig, UserCarteirinhaData } from '../types';
 import { Shield, User as UserIcon, Printer, QrCode, Layers, RotateCw } from 'lucide-react';
 import { getPerfilCarteirinhaLabel, getCarteirinhaConfig, getOrCreateUserCredential } from '../utils/carteirinhaUtils';
 import CarteirinhaBack from './CarteirinhaBack';
+import BarcodeSvg from './BarcodeSvg';
 
 interface CarteirinhaCardProps {
   user: User;
@@ -128,6 +130,23 @@ export default function CarteirinhaCard({
       console.error('Erro ao gerar QR Code para impressão:', e);
     }
 
+    let barcodeDataUrl = '';
+    try {
+      const canvas = document.createElement('canvas');
+      JsBarcode(canvas, credential.credentialId, {
+        format: 'CODE128',
+        width: 2,
+        height: 38,
+        displayValue: false,
+        margin: 2,
+        background: '#ffffff',
+        lineColor: '#000000',
+      });
+      barcodeDataUrl = canvas.toDataURL('image/png');
+    } catch (e) {
+      console.error('Erro ao gerar código de barras para impressão:', e);
+    }
+
     let cssBeltBg = 'background-color: #ffffff; color: #000000; border: 1px solid #ccc;';
     let cssBarBg = 'background-color: #000000;';
     if (isPreta) { cssBeltBg = 'background-color: #000000; color: #ffffff; border: 1px solid #333;'; cssBarBg = 'background-color: #dc2626;'; }
@@ -152,11 +171,10 @@ export default function CarteirinhaCard({
       ? `background: linear-gradient(135deg, ${config.versoCorPrincipal || '#0f0f0f'} 0%, ${config.versoCorSecundaria || '#1c1c1c'} 100%);`
       : `background-color: ${config.versoCorPrincipal || '#0f0f0f'};`;
 
+    const logoSrc = config.logoPrincipalUrl || '/Logo branca.png';
     const logoHtml = `<div style="display: flex; align-items: center; gap: 8px;">
          <div style="width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, #f97316 0%, #dc2626 100%); display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 3px; box-sizing: border-box;">
-           ${config.logoPrincipalUrl
-             ? `<img src="${config.logoPrincipalUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; filter: ${config.logoUsarBranca ? 'brightness(0) invert(1)' : 'none'};" />`
-             : `<span style="font-size: 18px; color: white;">🛡️</span>`}
+           <img src="${logoSrc}" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
          </div>
          <div>
            <div style="font-size: 11px; font-weight: 900; letter-spacing: 2px; color: #ffffff;">${config.nomeInstituicao || 'ARENA DO COMPETIDOR'}</div>
@@ -568,6 +586,9 @@ export default function CarteirinhaCard({
                   <div style="font-size: 7px; color: #aaa; font-family: 'JetBrains Mono', monospace;">
                     CREDENCIAL ID: ${credential.credentialId}
                   </div>
+                  ${barcodeDataUrl ? `<div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.15); text-align: center;">
+                    <img src="${barcodeDataUrl}" style="height: 24px; max-width: 100%; display: block; margin: 0 auto; filter: invert(1) brightness(2);" />
+                  </div>` : ''}
                 </div>
               </div>
 

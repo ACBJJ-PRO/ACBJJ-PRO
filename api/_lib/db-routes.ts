@@ -1740,13 +1740,16 @@ const handleVerification = async (req: Request, res: Response) => {
       });
     }
 
-    // Exact query matching only
+    // Robust query matching with cleanTarget
     const matchedList = await db.select().from(schema.carteirinhas)
       .where(or(
         eq(schema.carteirinhas.credentialId, targetCode),
+        eq(schema.carteirinhas.credentialId, cleanTarget),
         eq(schema.carteirinhas.authCode, targetCode),
+        eq(schema.carteirinhas.authCode, cleanTarget),
         eq(schema.carteirinhas.qrToken, rawCode),
-        eq(schema.carteirinhas.registro, targetCode)
+        eq(schema.carteirinhas.registro, targetCode),
+        eq(schema.carteirinhas.registro, cleanTarget)
       ))
       .limit(1);
 
