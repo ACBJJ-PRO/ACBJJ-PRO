@@ -122,7 +122,7 @@ export default function LoginScreen({
     if (logoApp && (logoApp.startsWith('data:image/') || logoApp.startsWith('http://') || logoApp.startsWith('https://') || logoApp.startsWith('blob:'))) {
       return logoApp;
     }
-    return '/ARENADOCOMPETIDOR.png';
+    return theme === 'white' ? '/ARENADOCOMPETIDOR.png' : '/Logo%20branca.png';
   };
 
   const getLogoContainerStyle = (theme: string) => {
