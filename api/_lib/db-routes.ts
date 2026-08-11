@@ -130,8 +130,19 @@ router.post('/login', async (req: Request, res: Response) => {
     let matchedRawUser: any = null;
 
     for (const uRow of dbUsers) {
-      const rawUser = (uRow.rawUser as any) || uRow;
-      const userCpf = String(rawUser.cpf || uRow.uid || '').trim();
+      let rawUser: any = uRow.rawUser;
+      if (typeof rawUser === 'string') {
+        try {
+          rawUser = JSON.parse(rawUser);
+        } catch {
+          rawUser = {};
+        }
+      }
+      if (!rawUser || typeof rawUser !== 'object') {
+        rawUser = uRow;
+      }
+
+      const userCpf = String(rawUser.cpf || uRow.cpf || uRow.uid || '').trim();
       let cleanUserCpf = userCpf;
       if (userCpf.toUpperCase().startsWith('INF-')) {
         cleanUserCpf = userCpf.toUpperCase().trim();
@@ -146,9 +157,9 @@ router.post('/login', async (req: Request, res: Response) => {
         break;
       }
 
-      // Admin CPF fallback (12345678912 or 12345678900)
+      // Admin CPF fallback (12345678912, 12345678900, 12345678911)
       if (
-        (cleanInputCpf === '12345678912' || cleanInputCpf === '12345678900') &&
+        (cleanInputCpf === '12345678912' || cleanInputCpf === '12345678900' || cleanInputCpf === '12345678911') &&
         (uRow.tipo === 'admin' || rawUser.tipo === 'admin' || uRow.uid === 'admin' || rawUser.email === 'admin@admin.com')
       ) {
         matchedUserRow = uRow;
@@ -167,7 +178,18 @@ router.post('/login', async (req: Request, res: Response) => {
     // Student fallback if not in users
     if (!matchedUserRow) {
       for (const sRow of dbStudents) {
-        const rawStudent = (sRow.rawStudent as any) || sRow;
+        let rawStudent: any = sRow.rawStudent;
+        if (typeof rawStudent === 'string') {
+          try {
+            rawStudent = JSON.parse(rawStudent);
+          } catch {
+            rawStudent = {};
+          }
+        }
+        if (!rawStudent || typeof rawStudent !== 'object') {
+          rawStudent = sRow;
+        }
+
         const studentCpf = String(rawStudent.cpf || sRow.cpf || '').trim();
         let cleanStudentCpf = studentCpf;
         if (studentCpf.toUpperCase().startsWith('INF-')) {

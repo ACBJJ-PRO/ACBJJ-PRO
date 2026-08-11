@@ -12,15 +12,27 @@ app.use('/api', (req, res, next) => {
 });
 
 app.use('/api/cloudsql', dbRoutesRouter);
+app.use('/cloudsql', dbRoutesRouter);
+app.use('/', dbRoutesRouter);
 
 // Global Error Middleware to prevent default HTML 500 pages on serverless functions
 app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[Serverless API Global Error]:', err?.stack || err?.message || String(err));
   if (!res.headersSent) {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    if (err instanceof SyntaxError && 'body' in err) {
+      return res.status(400).json({
+        ok: false,
+        success: false,
+        code: 'INVALID_JSON',
+        message: 'JSON de entrada inválido.',
+        error: 'JSON de entrada inválido.',
+      });
+    }
     res.status(500).json({
       ok: false,
       success: false,
+      code: 'LOGIN_INTERNAL_ERROR',
       error: 'INTERNAL_SERVER_ERROR',
       message: 'Erro interno de autenticação. Tente novamente.',
     });
