@@ -767,19 +767,24 @@ export function verifyCredentialQuery(
     });
   }
 
-  // Search Strategy 5: Exact Match on CPF or Holder Key
+  // Search Strategy 5: Exact Match on CPF, IIP, or Holder Key
   if (!matched) {
     matched = credentialsList.find((c) => {
+      const uCpf = c.rawCarteirinha?.user?.cpf ? String(c.rawCarteirinha.user.cpf).trim().toUpperCase() : '';
+      const aCpf = c.rawCarteirinha?.student?.cpf ? String(c.rawCarteirinha.student.cpf).trim().toUpperCase() : '';
       return (
         c.id === cleanQuery ||
         c.id === `user-${strippedQuery}` ||
-        c.id === `student-${strippedQuery}`
+        c.id === `student-${strippedQuery}` ||
+        (uCpf && (uCpf === cleanQuery || uCpf === rawQuery.trim().toUpperCase())) ||
+        (aCpf && (aCpf === cleanQuery || aCpf === rawQuery.trim().toUpperCase()))
       );
     });
   }
 
   // Search Strategy 6: Deconstructed Structural Fallback & Hash Cross-Match (e.g. CARD-0037-X51P <-> ACBJJ-X51P-Z9WE)
   if (!matched) {
+    const isIipQuery = cleanQuery.startsWith('IIP-') || cleanQuery.startsWith('INF-') || cleanQuery.startsWith('IIP') || cleanQuery.startsWith('INF');
     const parts = cleanQuery.split(/[-_]/).filter(Boolean);
     const entityDigits = cleanQuery.replace(/\D/g, '');
     let extractedHash = '';
@@ -803,7 +808,7 @@ export function verifyCredentialQuery(
 
       if (
         (extractedHash && (cId.includes(extractedHash) || cAuth.includes(extractedHash))) ||
-        (entityDigits && cEntityDigits && entityDigits === cEntityDigits)
+        (!isIipQuery && entityDigits && cEntityDigits && entityDigits === cEntityDigits)
       ) {
         if (!candidateMatches.some((cm) => cm.id === c.id)) {
           candidateMatches.push(c);
@@ -811,8 +816,39 @@ export function verifyCredentialQuery(
       }
     });
 
-    // Also search across allUsuarios and allAlunos by computing deterministic credential
-    if (entityDigits) {
+    // If search query is IIP/INF document string, search by document field
+    if (isIipQuery) {
+      allUsuarios.forEach((u) => {
+        const uCpf = String(u.cpf || '').trim().toUpperCase();
+        if (
+          uCpf === cleanQuery ||
+          uCpf === `IIP-${entityDigits}` ||
+          uCpf === `INF-${entityDigits}` ||
+          (entityDigits && entityDigits.length >= 6 && uCpf.includes(entityDigits))
+        ) {
+          const cred = getOrCreateUserCredential('user', u.id, u, null);
+          if (cred && !candidateMatches.some((cm) => cm.id === cred.id)) {
+            candidateMatches.push(cred);
+          }
+        }
+      });
+
+      allAlunos.forEach((a) => {
+        const aCpf = String(a.cpf || '').trim().toUpperCase();
+        if (
+          aCpf === cleanQuery ||
+          aCpf === `IIP-${entityDigits}` ||
+          aCpf === `INF-${entityDigits}` ||
+          (entityDigits && entityDigits.length >= 6 && aCpf.includes(entityDigits))
+        ) {
+          const cred = getOrCreateUserCredential('student', a.id, null, a);
+          if (cred && !candidateMatches.some((cm) => cm.id === cred.id)) {
+            candidateMatches.push(cred);
+          }
+        }
+      });
+    } else if (entityDigits) {
+      // Also search across allUsuarios and allAlunos by computing deterministic credential
       const numId = parseInt(entityDigits, 10);
       allUsuarios.forEach((u) => {
         if (u.id === numId || String(u.id) === entityDigits) {
@@ -832,23 +868,60 @@ export function verifyCredentialQuery(
       });
     }
 
+    // Deduplicate candidateMatches that represent the same person
+    const dedupedCandidates: CarteirinhaCredential[] = [];
+    candidateMatches.forEach((candidate) => {
+      const dupIdx = dedupedCandidates.findIndex((existing) => {
+        if (existing.id === candidate.id) return true;
+
+        const candStudentId = candidate.entityType === 'student' ? candidate.entityId : (existing.entityType === 'student' ? existing.entityId : null);
+        const candUserId = candidate.entityType === 'user' ? candidate.entityId : (existing.entityType === 'user' ? existing.entityId : null);
+
+        if (candStudentId && candUserId) {
+          const studentObj = allAlunos.find((a) => String(a.id) === String(candStudentId));
+          const userObj = allUsuarios.find((u) => String(u.id) === String(candUserId));
+
+          if (studentObj && userObj) {
+            const isSameUserRef = String(studentObj.usuarioId || '') === String(userObj.id);
+            const isSameNumId = String(studentObj.id) === String(userObj.id);
+            const isSameCpf = Boolean(studentObj.cpf && userObj.cpf && studentObj.cpf.replace(/\D/g, '') === userObj.cpf.replace(/\D/g, ''));
+            const isSameEmail = Boolean(studentObj.email && userObj.email && studentObj.email.toLowerCase().trim() === userObj.email.toLowerCase().trim());
+
+            if (isSameUserRef || isSameNumId || isSameCpf || isSameEmail) {
+              return true;
+            }
+          }
+        }
+        return false;
+      });
+
+      if (dupIdx === -1) {
+        dedupedCandidates.push(candidate);
+      } else {
+        // Prefer student candidate over user candidate
+        if (candidate.entityType === 'student' && dedupedCandidates[dupIdx].entityType === 'user') {
+          dedupedCandidates[dupIdx] = candidate;
+        }
+      }
+    });
+
     // Safety Ambiguity Check: Ensure distinct candidate resolution
-    if (candidateMatches.length === 1) {
-      matched = candidateMatches[0];
+    if (dedupedCandidates.length === 1) {
+      matched = dedupedCandidates[0];
       // Self-heal / align credential ID format if needed
       if (matched && entityDigits) {
         const entityType = matched.entityType || (matched.id.startsWith('student-') ? 'student' : 'user');
         const entityId = matched.entityId || matched.userId;
         getOrCreateUserCredential(entityType as any, entityId);
       }
-    } else if (candidateMatches.length > 1) {
+    } else if (dedupedCandidates.length > 1) {
       // More than one distinct match -> return ambiguity error for security
       const diagnostic: CredentialAuditDiagnostic = {
         rawInput: rawQuery,
         normalizedQuery: cleanQuery,
         strippedQuery: strippedQuery,
         detectedType: 'AMBIGUOS',
-        searchedCount: candidateMatches.length,
+        searchedCount: dedupedCandidates.length,
         credentialFound: false,
         titularFound: false,
         failedStep: 'AMBIGUIDADE_DETECTADA',

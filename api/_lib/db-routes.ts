@@ -654,7 +654,11 @@ router.post('/students/save', requireAuth, async (req: AuthRequest, res: Respons
 
     // Normalize CPF
     let cleanCpf = a.cpf ? String(a.cpf).trim() : null;
-    if (cleanCpf && !cleanCpf.startsWith('INF-')) {
+    const isProvisorioDoc = Boolean(
+      a.isCpfProvisorio ||
+      (cleanCpf && (cleanCpf.startsWith('INF-') || cleanCpf.startsWith('IIP-') || cleanCpf.startsWith('IIP') || cleanCpf.startsWith('INF')))
+    );
+    if (cleanCpf && !isProvisorioDoc) {
       const digitsOnly = cleanCpf.replace(/\D/g, '');
       if (digitsOnly.length !== 11) {
         return res.status(400).json({ error: 'CPF deve conter exatamente 11 dígitos numéricos', code: 'INVALID_CPF' });
@@ -1835,10 +1839,38 @@ const handleVerification = async (req: Request, res: Response) => {
       )
     );
 
+    // Deduplicate same-person records in Step 1
+    if (matchedList.length > 1) {
+      const dedupedStep1: typeof matchedList = [];
+      for (const item of matchedList) {
+        const dupIdx = dedupedStep1.findIndex((existing) => {
+          if (existing.id === item.id) return true;
+          const isStudentAndUser =
+            (item.entityType === 'student' && existing.entityType === 'user') ||
+            (item.entityType === 'user' && existing.entityType === 'student');
+          if (isStudentAndUser) {
+            if (String(item.entityId) === String(existing.entityId) || String(item.userId) === String(existing.userId)) {
+              return true;
+            }
+          }
+          return false;
+        });
+        if (dupIdx === -1) {
+          dedupedStep1.push(item);
+        } else {
+          if (item.entityType === 'student' && dedupedStep1[dupIdx].entityType === 'user') {
+            dedupedStep1[dupIdx] = item;
+          }
+        }
+      }
+      matchedList = dedupedStep1;
+    }
+
     // Step 2: Deconstructed Structural Fallback (Recovery for unindexed / historical records)
     if (matchedList.length === 0) {
+      const isIipQuery = cleanTarget.startsWith('IIP-') || cleanTarget.startsWith('INF-') || cleanTarget.startsWith('IIP') || cleanTarget.startsWith('INF');
       const entityDigits = cleanTarget.replace(/\D/g, '');
-      const numId = entityDigits ? parseInt(entityDigits, 10) : NaN;
+      const numId = (!isIipQuery && entityDigits) ? parseInt(entityDigits, 10) : NaN;
 
       const candidatesMap = new Map<string, any>();
 
@@ -1853,8 +1885,89 @@ const handleVerification = async (req: Request, res: Response) => {
         hashMatches.forEach((c) => candidatesMap.set(c.id, c));
       }
 
-      // Check users & alunos by ID / digits
-      if (!isNaN(numId)) {
+      const host = req.headers.host || 'arenadocompetidor.com';
+      const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
+
+      // If search query is an IIP / INF document string, query users and alunos by cpf column
+      if (isIipQuery || (cleanTarget.length >= 8 && (cleanTarget.includes('IIP') || cleanTarget.includes('INF')))) {
+        const iipUserMatches = await db.select().from(schema.users).where(
+          sql`${schema.users.rawUser}->>'cpf' IN (${targetCode}, ${cleanTarget}, ${'IIP-' + entityDigits}, ${'INF-' + entityDigits})`
+        );
+
+        for (const u of iipUserMatches) {
+          const id = `user-${u.id || u.uid}`;
+          const cleanId = String(u.id || u.uid).replace(/\D/g, '');
+          const hash1 = simpleHash(`seed1-${id}`).toString(36).toUpperCase().padStart(4, '7').substring(0, 4);
+          const hash2 = simpleHash(`seed2-${id}`).toString(36).toUpperCase().padStart(4, '9').substring(0, 4);
+          const credId = `CARD-${cleanId.padStart(4, '0').slice(-4)}-${hash1}`;
+          const authC = `ACBJJ-${hash1}-${hash2}`;
+          const qrToken = `${proto}://${host}/verify/card/${credId}`;
+
+          const autoRecord = {
+            id,
+            credentialId: credId,
+            authCode: authC,
+            entityType: 'user',
+            entityId: String(u.id || u.uid),
+            userId: String(u.id || u.uid),
+            userNome: u.name || 'Titular',
+            userTipo: u.tipo || 'usuario',
+            fotoPerfil: u.fotoPerfil || '',
+            status: 'ativo',
+            validade: 'DEZ/2027',
+            registro: `ACBJJ2026${String(u.id).padStart(3, '0')}`,
+            qrToken,
+            rawCarteirinha: null,
+            updatedAt: new Date(),
+          };
+
+          await db.insert(schema.carteirinhas).values(autoRecord).onConflictDoNothing().catch(() => {});
+          candidatesMap.set(id, autoRecord);
+        }
+
+        const iipStudentMatches = await db.select().from(schema.alunos).where(
+          or(
+            eq(schema.alunos.cpf, targetCode),
+            eq(schema.alunos.cpf, cleanTarget),
+            eq(schema.alunos.cpf, `IIP-${entityDigits}`),
+            eq(schema.alunos.cpf, `INF-${entityDigits}`)
+          )
+        );
+
+        for (const a of iipStudentMatches) {
+          const id = `student-${a.id}`;
+          const cleanId = String(a.id).replace(/\D/g, '');
+          const hash1 = simpleHash(`seed1-${id}`).toString(36).toUpperCase().padStart(4, '7').substring(0, 4);
+          const hash2 = simpleHash(`seed2-${id}`).toString(36).toUpperCase().padStart(4, '9').substring(0, 4);
+          const credId = `CARD-${cleanId.padStart(4, '0').slice(-4)}-${hash1}`;
+          const authC = `ACBJJ-${hash1}-${hash2}`;
+          const qrToken = `${proto}://${host}/verify/card/${credId}`;
+
+          const autoRecord = {
+            id,
+            credentialId: credId,
+            authCode: authC,
+            entityType: 'student',
+            entityId: String(a.id),
+            userId: String(a.id),
+            userNome: a.nome || 'Atleta Arena',
+            userTipo: 'aluno',
+            fotoPerfil: a.fotoPerfil || '',
+            status: 'ativo',
+            validade: 'DEZ/2027',
+            registro: `ACBJJ2026${String(a.id).padStart(3, '0')}`,
+            qrToken,
+            rawCarteirinha: null,
+            updatedAt: new Date(),
+          };
+
+          await db.insert(schema.carteirinhas).values(autoRecord).onConflictDoNothing().catch(() => {});
+          candidatesMap.set(id, autoRecord);
+        }
+      }
+
+      // Check users & alunos by ID / digits ONLY when NOT an IIP query
+      if (!isIipQuery && !isNaN(numId)) {
         const userMatches = await db.select().from(schema.users).where(
           or(
             eq(schema.users.id, numId),
@@ -1862,9 +1975,6 @@ const handleVerification = async (req: Request, res: Response) => {
             eq(schema.users.uid, entityDigits)
           )
         );
-
-        const host = req.headers.host || 'arenadocompetidor.com';
-        const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
 
         for (const u of userMatches) {
           const id = `user-${u.id || u.uid}`;
@@ -1936,7 +2046,99 @@ const handleVerification = async (req: Request, res: Response) => {
         }
       }
 
-      const candidateList = Array.from(candidatesMap.values());
+      // Check users & alunos by real 11-digit CPF when NOT an IIP query
+      if (!isIipQuery && entityDigits.length === 11) {
+        const cpfUserMatches = await db.select().from(schema.users).where(sql`${schema.users.rawUser}->>'cpf' = ${entityDigits}`);
+        for (const u of cpfUserMatches) {
+          const id = `user-${u.id || u.uid}`;
+          const cleanId = String(u.id || u.uid).replace(/\D/g, '');
+          const hash1 = simpleHash(`seed1-${id}`).toString(36).toUpperCase().padStart(4, '7').substring(0, 4);
+          const hash2 = simpleHash(`seed2-${id}`).toString(36).toUpperCase().padStart(4, '9').substring(0, 4);
+          const credId = `CARD-${cleanId.padStart(4, '0').slice(-4)}-${hash1}`;
+          const authC = `ACBJJ-${hash1}-${hash2}`;
+          const qrToken = `${proto}://${host}/verify/card/${credId}`;
+
+          const autoRecord = {
+            id,
+            credentialId: credId,
+            authCode: authC,
+            entityType: 'user',
+            entityId: String(u.id || u.uid),
+            userId: String(u.id || u.uid),
+            userNome: u.name || 'Titular',
+            userTipo: u.tipo || 'usuario',
+            fotoPerfil: u.fotoPerfil || '',
+            status: 'ativo',
+            validade: 'DEZ/2027',
+            registro: `ACBJJ2026${String(u.id).padStart(3, '0')}`,
+            qrToken,
+            rawCarteirinha: null,
+            updatedAt: new Date(),
+          };
+
+          await db.insert(schema.carteirinhas).values(autoRecord).onConflictDoNothing().catch(() => {});
+          candidatesMap.set(id, autoRecord);
+        }
+
+        const cpfStudentMatches = await db.select().from(schema.alunos).where(eq(schema.alunos.cpf, entityDigits));
+        for (const a of cpfStudentMatches) {
+          const id = `student-${a.id}`;
+          const cleanId = String(a.id).replace(/\D/g, '');
+          const hash1 = simpleHash(`seed1-${id}`).toString(36).toUpperCase().padStart(4, '7').substring(0, 4);
+          const hash2 = simpleHash(`seed2-${id}`).toString(36).toUpperCase().padStart(4, '9').substring(0, 4);
+          const credId = `CARD-${cleanId.padStart(4, '0').slice(-4)}-${hash1}`;
+          const authC = `ACBJJ-${hash1}-${hash2}`;
+          const qrToken = `${proto}://${host}/verify/card/${credId}`;
+
+          const autoRecord = {
+            id,
+            credentialId: credId,
+            authCode: authC,
+            entityType: 'student',
+            entityId: String(a.id),
+            userId: String(a.id),
+            userNome: a.nome || 'Atleta Arena',
+            userTipo: 'aluno',
+            fotoPerfil: a.fotoPerfil || '',
+            status: 'ativo',
+            validade: 'DEZ/2027',
+            registro: `ACBJJ2026${String(a.id).padStart(3, '0')}`,
+            qrToken,
+            rawCarteirinha: null,
+            updatedAt: new Date(),
+          };
+
+          await db.insert(schema.carteirinhas).values(autoRecord).onConflictDoNothing().catch(() => {});
+          candidatesMap.set(id, autoRecord);
+        }
+      }
+
+      const rawCandidateList = Array.from(candidatesMap.values());
+      const candidateList: any[] = [];
+
+      for (const candidate of rawCandidateList) {
+        const dupIdx = candidateList.findIndex((existing) => {
+          if (existing.id === candidate.id) return true;
+
+          const candStudentId = candidate.entityType === 'student' ? candidate.entityId : (existing.entityType === 'student' ? existing.entityId : null);
+          const candUserId = candidate.entityType === 'user' ? candidate.entityId : (existing.entityType === 'user' ? existing.entityId : null);
+
+          if (candStudentId && candUserId) {
+            // Check if student and user represent the same person
+            if (String(candStudentId) === String(candUserId)) return true;
+          }
+          return false;
+        });
+
+        if (dupIdx === -1) {
+          candidateList.push(candidate);
+        } else {
+          // Prefer student candidate over user candidate
+          if (candidate.entityType === 'student' && candidateList[dupIdx].entityType === 'user') {
+            candidateList[dupIdx] = candidate;
+          }
+        }
+      }
 
       if (candidateList.length === 1) {
         matchedList = candidateList;

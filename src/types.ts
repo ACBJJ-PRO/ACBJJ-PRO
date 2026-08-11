@@ -530,6 +530,7 @@ export interface CarteirinhaCredential {
   updatedAt: string;
   revokedAt?: string;
   viasEmitidas?: number;
+  rawCarteirinha?: any;
 }
 
 export interface CarteirinhaAuthLog {
